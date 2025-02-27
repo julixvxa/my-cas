@@ -1,6 +1,6 @@
 -- Table for schools
 CREATE TABLE school (
-    schoolID INTEGER PRIMARY KEY AUTOINCREMENT,
+    schoolID SERIAL PRIMARY KEY,
     schoolFullName TEXT NOT NULL
 );
 
@@ -12,39 +12,39 @@ CREATE TABLE userProfile (
     schoolID INTEGER,
     userRole TEXT NOT NULL,
     userGraduationYear INTEGER,
-    FOREIGN KEY (schoolID) REFERENCES school(schoolID)
+    FOREIGN KEY (schoolID) REFERENCES school(schoolID) ON DELETE SET NULL
 );
 
 -- Table for posts
 CREATE TABLE post (
-    postID INTEGER PRIMARY KEY AUTOINCREMENT,
+    postID SERIAL PRIMARY KEY,
     userID TEXT,
     postCASCategoryID INTEGER,
     postMonthID INTEGER,
     postText TEXT NOT NULL,
     postPrivacyID INTEGER,
-    postDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (userID) REFERENCES userProfile(userID)
+    postDate TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (userID) REFERENCES userProfile(userID) ON DELETE CASCADE
 );
 
 -- Table for comments on posts
 CREATE TABLE comments (
-    commentID INTEGER PRIMARY KEY AUTOINCREMENT,
-    postID TEXT,
-    commentDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    commentID SERIAL PRIMARY KEY,
+    postID INTEGER,
+    commentDate TIMESTAMP DEFAULT NOW(),
     commentText TEXT NOT NULL,
     commentingUserID TEXT NOT NULL,
-    FOREIGN KEY (postID) REFERENCES post(postID),
-    FOREIGN KEY (commentingUserID) REFERENCES userProfile(userID)
+    FOREIGN KEY (postID) REFERENCES post(postID) ON DELETE CASCADE,
+    FOREIGN KEY (commentingUserID) REFERENCES userProfile(userID) ON DELETE CASCADE
 );
 
 -- Table for likes on posts
 CREATE TABLE likes (
     postID INTEGER NOT NULL,
     userID TEXT NOT NULL,
-    FOREIGN KEY (postID) REFERENCES posts(postID),
-    FOREIGN KEY (userID) REFERENCES userProfile(userID),
-    UNIQUE (postID, userID)
+    FOREIGN KEY (postID) REFERENCES post(postID) ON DELETE CASCADE,
+    FOREIGN KEY (userID) REFERENCES userProfile(userID) ON DELETE CASCADE,
+    UNIQUE (postID, userID) -- Ensures a user can only like a post once
 );
 
 -- Table for friendship statuses
@@ -55,32 +55,32 @@ CREATE TABLE friendshipStatus (
 
 -- Table for media associated with posts
 CREATE TABLE media (
-    postID TEXT,
+    postID INTEGER,
     mediaFile TEXT PRIMARY KEY,
-    FOREIGN KEY (postID) REFERENCES post(postID)
+    FOREIGN KEY (postID) REFERENCES post(postID) ON DELETE CASCADE
 );
 
 -- Table for notifications
 CREATE TABLE notifications (
-    notificationID INTEGER PRIMARY KEY AUTOINCREMENT,
+    notificationID SERIAL PRIMARY KEY,
     userID TEXT,
     notificationType TEXT NOT NULL,
-    notificationTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notificationTime TIMESTAMP DEFAULT NOW(),
     actorID TEXT,
     postID INTEGER,
-    FOREIGN KEY (postID) REFERENCES post(postID),
-    FOREIGN KEY (actorID) REFERENCES userProfile(userID),
-    FOREIGN KEY (userID) REFERENCES userProfile(userID)
+    FOREIGN KEY (postID) REFERENCES post(postID) ON DELETE CASCADE,
+    FOREIGN KEY (actorID) REFERENCES userProfile(userID) ON DELETE SET NULL,
+    FOREIGN KEY (userID) REFERENCES userProfile(userID) ON DELETE CASCADE
 );
 
 -- Table for friends
 CREATE TABLE friends (
-    friendshipID INTEGER PRIMARY KEY AUTOINCREMENT,
+    friendshipID SERIAL PRIMARY KEY,
     userAddresserID TEXT,
     userAddresseeID TEXT,
     statusID TEXT DEFAULT 'd',
-    FOREIGN KEY (userAddresserID) REFERENCES userProfile(userID),
-    FOREIGN KEY (userAddresseeID) REFERENCES userProfile(userID),
+    FOREIGN KEY (userAddresserID) REFERENCES userProfile(userID) ON DELETE CASCADE,
+    FOREIGN KEY (userAddresseeID) REFERENCES userProfile(userID) ON DELETE CASCADE,
     FOREIGN KEY (statusID) REFERENCES friendshipStatus(statusID),
     UNIQUE (userAddresserID, userAddresseeID) -- Ensures no duplicate relationships
 );

@@ -1,54 +1,65 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg'); // Use PostgreSQL
 const multer = require('multer');
 const path = require('path');
 const session = require('express-session');
-const req = require('express/lib/request');
+const pgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcrypt');
-const SQLiteStore = require('connect-sqlite3')(session);
-
 require('dotenv').config();
 
-
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
+
+// PostgreSQL connection pool
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
 
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
+// Session Store with PostgreSQL
 app.use(session({
-    store: new SQLiteStore({
-      db: 'sessions.sqlite',
-      dir: './db',
-      logErrors: true
+    store: new pgSession({
+        pool: pool,
+        tableName: 'session', // Creates a 'session' table if not exists
     }),
-    secret: process.env.SESSION_SECRET || 'fallback_secret', // Fallback secret if env isn't loaded.
+    secret: process.env.SESSION_SECRET || 'fallback_secret', 
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: { 
-      secure: false,
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24
+        secure: false,
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 24
     }
-  }));
+}));
 
 console.log('Loaded session secret:', process.env.SESSION_SECRET);
-console.log('express-session version:', require('express-session/package.json').version);
-console.log('process.env:', process.env);
+
+// Sample route to test database connection
+app.get('/test-db', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT NOW()');
+        res.json({ success: true, time: result.rows[0].now });
+    } catch (error) {
+        console.error('Database connection error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+});
 
 
 
 
 // Serve static files from the uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Database setup
-const Database = require('better-sqlite3');
-const db = new Database('database.db');
-
 
 
 const saltRounds = 10;
@@ -57,76 +68,68 @@ const saltRounds = 10;
 
 
 // register endpoint
-app.post('/register', (req, res) => {
+app.post('/register', async (req, res) => {
     const { schoolFullName, email, userFullName, password } = req.body;
-    const userID = email; // Assuming userID is derived from email
+    const userID = email; // Assuming userID is the email
 
-    const getSchoolQuery = 'SELECT schoolID FROM school WHERE schoolFullName = ?';
-    db.get(getSchoolQuery, [schoolFullName], async (err, row) => {
-        if (err) {
-            console.error('Error checking school:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
-        }
+    try {
+        // Check if the school already exists
+        const schoolResult = await pool.query('SELECT schoolID FROM school WHERE schoolFullName = $1', [schoolFullName]);
 
         let schoolID;
-
-        if (!row) {
-            // School does not exist, insert into school table
-            const insertSchoolQuery = 'INSERT INTO school (schoolFullName) VALUES (?)';
-            db.run(insertSchoolQuery, [schoolFullName], function (err) {
-                if (err) {
-                    console.error('Error inserting school:', err.message);
-                    return res.status(500).json({ success: false, message: 'Database error' });
-                }
-                schoolID = this.lastID; // Get the auto-generated schoolID
-
-                // Hash the password securely
-                bcrypt.hash(password, saltRounds, (err, hashedPassword) => {
-                    if (err) {
-                        console.error('Error hashing password:', err.message);
-                        return res.status(500).json({ success: false, message: 'Server error' });
-                    }
-
-                    // Insert user data into the userProfile table
-                    const query = 'INSERT INTO userProfile (userID, userFullName, userPasswordHash, schoolID, userRole) VALUES (?, ?, ?, ?, ?)';
-                    db.run(query, [userID, userFullName, hashedPassword, schoolID, 'm'], function (err) {
-                        if (err) {
-                            console.error('Error during registration:', err.message);
-                            return res.status(500).json({ success: false, message: 'Database error' });
-                        }
-
-                        // Save the session data
-                        req.session.userID = userID;
-                        res.json({ success: true });
-                    });
-                });
-            });
+        if (schoolResult.rows.length === 0) {
+            // School does not exist, insert it
+            const insertSchoolResult = await pool.query(
+                'INSERT INTO school (schoolFullName) VALUES ($1) RETURNING schoolID',
+                [schoolFullName]
+            );
+            schoolID = insertSchoolResult.rows[0].schoolID;
         } else {
-            // School exists, prompt login instead
-            res.json({ success: false, message: 'School already registered, please log in' });
+            // If school exists, get its ID
+            schoolID = schoolResult.rows[0].schoolID;
         }
-    });
+
+        // Hash the password securely
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // Insert user data into userProfile table
+        await pool.query(
+            'INSERT INTO userProfile (userID, userFullName, userPasswordHash, schoolID, userRole) VALUES ($1, $2, $3, $4, $5)',
+            [userID, userFullName, hashedPassword, schoolID, 'm']
+        );
+
+        // Save session data
+        req.session.userID = userID;
+        res.json({ success: true });
+
+    } catch (err) {
+        console.error('Error during registration:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    }
 });
 
 
 
 // Helper function to get the schoolID
-function getSchoolID(schoolFullName) {
-    return new Promise((resolve, reject) => {
-        const query = 'SELECT schoolID FROM school WHERE schoolFullName = ?';
-        db.get(query, [schoolFullName], (err, row) => {
-            if (err) return reject(err);
-            if (!row) return reject(new Error('School does not exist'));
-            resolve(row.schoolID);
-        });
-    });
-}
+async function getSchoolID(schoolFullName) {
+    try {
+        const query = 'SELECT schoolID FROM school WHERE schoolFullName = $1';
+        const result = await pool.query(query, [schoolFullName]);
 
+        if (result.rows.length === 0) {
+            throw new Error('School does not exist');
+        }
+
+        return result.rows[0].schoolID;
+    } catch (err) {
+        throw err;
+    }
+}
 
 // Signup Endpoint
 app.post('/signup', async (req, res) => {
     const { email, fullName, password, school, year } = req.body;
-    const userID = email; // Assuming userID is derived from email
+    const userID = email; // Assuming userID is the email
 
     try {
         // Check if the school exists
@@ -135,21 +138,20 @@ app.post('/signup', async (req, res) => {
         // Hash the password securely
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Proceed with user creation in the database
-        const query = 'INSERT INTO userProfile (userID, userFullName, userPasswordHash, schoolID, userGraduationYear, userRole) VALUES (?, ?, ?, ?, ?, ?)';
-        
-        db.run(query, [userID, fullName, hashedPassword, schoolID, year, 's'], function (err) {
-            if (err) {
-                console.error('Error during sign-up:', err.message);
-                return res.status(500).json({ success: false, message: 'Database error' });
-            }
-            
-            // Save the user session
-            req.session.userID = userID;
-            res.json({ success: true });
-        });
+        // Insert user into the database
+        const query = `
+            INSERT INTO userProfile (userID, userFullName, userPasswordHash, schoolID, userGraduationYear, userRole) 
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING userID
+        `;
+
+        await pool.query(query, [userID, fullName, hashedPassword, schoolID, year, 's']);
+
+        // Save the user session
+        req.session.userID = userID;
+        res.json({ success: true });
+
     } catch (error) {
-        console.error('Error processing request:', error.message);
+        console.error('Error processing signup:', error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 });
@@ -157,54 +159,51 @@ app.post('/signup', async (req, res) => {
 
 
 
+
 // Login Endpoint
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
-    const query = 'SELECT * FROM userProfile WHERE userID = ?';
-    db.get(query, [email], async (err, user) => {
-        if (err) {
-            console.error('Error during login:', err.message);
-            return res.status(500).json({ success: false, message: 'Server error occurred' });
-        }
+    try {
+        const query = 'SELECT * FROM userProfile WHERE userID = $1';
+        const result = await pool.query(query, [email]);
 
-        if (user) {
-            try {
-                const match = await bcrypt.compare(password, user.userPasswordHash);
-
-                if (match) {
-                    // Successful login, save the session
-                    req.session.userID = user.userID;
-                    req.session.save((err) => {
-                        if (err) {
-                            console.error('Error saving session:', err.message);
-                            return res.status(500).json({ success: false, message: 'Session error' });
-                        }
-                        return res.status(200).json({ success: true, userID: user.userID });
-                    });
-                } else {
-                    return res.status(401).json({ success: false, message: 'Invalid credentials' });
-                }
-            } catch (error) {
-                console.error('Error comparing passwords:', error.message);
-                return res.status(500).json({ success: false, message: 'Error processing request' });
-            }
-        } else {
+        if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
-    });
+
+        const user = result.rows[0];
+
+        const match = await bcrypt.compare(password, user.userpasswordhash);
+
+        if (match) {
+            // Successful login, save the session
+            req.session.userID = user.userid;
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Error saving session:', err.message);
+                    return res.status(500).json({ success: false, message: 'Session error' });
+                }
+                return res.status(200).json({ success: true, userID: user.userid });
+            });
+        } else {
+            return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
+
+    } catch (error) {
+        console.error('Error during login:', error.message);
+        return res.status(500).json({ success: false, message: 'Server error occurred' });
+    }
 });
 
-
-
-// LOG OUT
+// Logout Endpoint
 app.post('/logout', (req, res) => {
     req.session.destroy(err => {
         if (err) {
             console.error('Error destroying session:', err.message);
-            return res.status(500).send({ success: false, message: 'Failed to log out' });
+            return res.status(500).json({ success: false, message: 'Failed to log out' });
         }
-        res.clearCookie('connect.sid'); // Clear the session cookie
+        res.clearCookie('connect.sid'); // Clear session cookie
         return res.send({ success: true, message: 'Logged out successfully' });
     });
 });
@@ -212,27 +211,29 @@ app.post('/logout', (req, res) => {
 
 
 
-// FETCHING USER ID
+// FETCHING USER ID FROM SESSION
 app.get('/session-userID', (req, res) => {
-    const userID = req.session.userID; // Ensure `userID` is set in the session somewhere else
+    const userID = req.session.userID; // Ensure `userID` is set in the session
     res.json({ success: true, userID: userID });
 });
 
-// FETCHING FULL NAME
-app.get('/user/:userID', (req, res) => {
+// FETCHING FULL NAME FROM DATABASE
+app.get('/user/:userID', async (req, res) => {
     const userID = req.params.userID;
-    const query = 'SELECT userFullName FROM userProfile WHERE userID = ?';
-    db.get(query, [userID], (err, row) => {
-        if (err) {
-            console.error('Error fetching user full name:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
-        }
-        if (row) {
-            res.json({ success: true, userFullName: row.userFullName });
+
+    try {
+        const query = 'SELECT userFullName FROM userProfile WHERE userID = $1';
+        const result = await pool.query(query, [userID]);
+
+        if (result.rows.length > 0) {
+            res.json({ success: true, userFullName: result.rows[0].userfullname });
         } else {
             res.status(404).json({ success: false, message: 'User not found' });
         }
-    });
+    } catch (error) {
+        console.error('Error fetching user full name:', error.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    }
 });
 
 
@@ -432,806 +433,684 @@ app.get('/postload', (req, res) => {
 
 
 // SEARCHING POSTS
-app.get('/searchPosts', (req, res) => {
-    const searchTerm = (req.query.search || '').trim();
-    const categoryID = req.query.categoryID;
-    const monthID = req.query.monthID;
-    const userID = req.query.userID;
-    const privacyID = req.query.privacyID;
-    const postID = parseInt(req.query.postID, 10);
-    const currentUser = req.query.currentUser;
-    const userRole = req.query.userRole;
+app.get('/searchPosts', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const searchTerm = (req.query.search || '').trim();
+        const categoryID = req.query.categoryID;
+        const monthID = req.query.monthID;
+        const userID = req.query.userID;
+        const privacyID = req.query.privacyID;
+        const postID = parseInt(req.query.postID, 10);
+        const currentUser = req.query.currentUser;
+        const userRole = req.query.userRole;
 
-    // Construct the base query
-    let query = `
-        SELECT post.*
-        FROM post
-        INNER JOIN userProfile ON post.userID = userProfile.userID
-        LEFT JOIN friends f ON (post.userID = f.userAddresseeID AND f.userAddresserID = ?) 
-                                OR (post.userID = f.userAddresserID AND f.userAddresseeID = ?)
-        WHERE 
-            ((post.postPrivacyID = 3) OR 
-            (post.postPrivacyID = 2 AND (f.statusID = 'a' OR ? = 'm' OR post.userID = ?)) OR 
-            (post.postPrivacyID = 1 AND (post.userID = ? OR ? = 'm')))
-    `;
+        let query = `
+            SELECT post.*
+            FROM post
+            INNER JOIN userProfile ON post.userID = userProfile.userID
+            LEFT JOIN friends f ON (post.userID = f.userAddresseeID AND f.userAddresserID = $1) 
+                                OR (post.userID = f.userAddresserID AND f.userAddresseeID = $2)
+            WHERE 
+                ((post.postPrivacyID = 3) OR 
+                (post.postPrivacyID = 2 AND (f.statusID = 'a' OR $3 = 'm' OR post.userID = $4)) OR 
+                (post.postPrivacyID = 1 AND (post.userID = $5 OR $6 = 'm')))
+        `;
 
-    console.log("user" + userID);
+        console.log("user", userID);
 
-    const queryParams = [currentUser, currentUser, userRole, currentUser, currentUser, userRole];
+        const queryParams = [currentUser, currentUser, userRole, currentUser, currentUser, userRole];
 
-    if (searchTerm.length === 0) {
-        // If searchTerm is empty, return all posts
-        if (categoryID) {
-            query += ' AND post.postCASCategoryID = ?';
-            queryParams.push(categoryID);
+        if (!searchTerm.length) {
+            if (categoryID) {
+                query += ' AND post.postCASCategoryID = $' + (queryParams.length + 1);
+                queryParams.push(categoryID);
+            }
+            if (monthID) {
+                query += ' AND post.postMonthID = $' + (queryParams.length + 1);
+                queryParams.push(monthID);
+            }
+            if (privacyID) {
+                query += ' AND post.postPrivacyID = $' + (queryParams.length + 1);
+                queryParams.push(privacyID);
+            }
+            if (userID) {
+                query += ' AND post.userID = $' + (queryParams.length + 1);
+                queryParams.push(userID);
+            }
+            if (postID) {
+                query += ' AND post.postID = $' + (queryParams.length + 1);
+                queryParams.push(postID);
+            }
+            query += ' ORDER BY post.postDate DESC';
+        } else {
+            const searchTerms = searchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
+
+            if (!searchTerms.length) {
+                return res.status(400).json({ success: false, message: 'No valid search terms provided' });
+            }
+
+            const conditions = [];
+            searchTerms.forEach((term, index) => {
+                conditions.push(`(post.postText ILIKE $${queryParams.length + 1} OR userProfile.userFullName ILIKE $${queryParams.length + 2})`);
+                queryParams.push(`%${term}%`, `%${term}%`);
+            });
+
+            if (conditions.length) {
+                query += ' AND ' + conditions.join(' AND ');
+            }
+
+            if (categoryID) {
+                query += ' AND post.postCASCategoryID = $' + (queryParams.length + 1);
+                queryParams.push(categoryID);
+            }
+            if (monthID) {
+                query += ' AND post.postMonthID = $' + (queryParams.length + 1);
+                queryParams.push(monthID);
+            }
+            if (privacyID) {
+                query += ' AND post.postPrivacyID = $' + (queryParams.length + 1);
+                queryParams.push(privacyID);
+            }
+            if (userID) {
+                query += ' AND post.userID = $' + (queryParams.length + 1);
+                queryParams.push(userID);
+            }
+
+            query += ' ORDER BY post.postDate DESC';
         }
-        if (monthID) {
-            query += ' AND post.postMonthID = ?';
-            queryParams.push(monthID);
-        }
-        if (privacyID) {
-            query += ' AND post.postPrivacyID = ?';
-            queryParams.push(privacyID);
-        }
-        if (userID) {
-            query += ' AND post.userID = ?';
-            queryParams.push(userID);
-        } if (postID){
-            query += ' AND post.postID = ?';
-            queryParams.push(postID);
-        }
-        query += ' ORDER BY post.postDate DESC';
 
         console.log('SQL Query:', query);
         console.log('Query Parameters:', queryParams);
 
-        db.all(query, queryParams, (err, rows) => {
-            if (err) {
-                console.error('Error executing query:', err.message);
-                return res.status(500).json({ success: false, message: 'Database error' });
-            }
-            res.json({ success: true, posts: rows });
-        });
-    } else {
-        const searchTerms = searchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
+        const result = await client.query(query, queryParams);
+        res.json({ success: true, posts: result.rows });
 
-        if (searchTerms.length === 0) {
-            return res.status(400).json({ success: false, message: 'No valid search terms provided' });
-        }
-
-        const conditions = [];
-
-        // Generate conditions to match all search terms
-        searchTerms.forEach(term => {
-            conditions.push(`(post.postText LIKE ? OR userProfile.userFullName LIKE ?)`);
-            queryParams.push(`%${term}%`, `%${term}%`);
-        });
-
-        if (conditions.length > 0) {
-            query += ' AND ' + conditions.join(' AND ');
-        }
-
-        if (categoryID) {
-            query += ' AND post.postCASCategoryID = ?';
-            queryParams.push(categoryID);
-        }
-        if (monthID) {
-            query += ' AND post.postMonthID = ?';
-            queryParams.push(monthID);
-        } 
-        if (privacyID) {
-            query += ' AND post.postPrivacyID = ?';
-            queryParams.push(privacyID);
-        }
-        if (userID) {
-            query += ' AND post.userID = ?';
-            queryParams.push(userID);
-        }
-        query += ' ORDER BY post.postDate DESC';
-
-        console.log('SQL Query:', query);
-        console.log('Query Parameters:', queryParams);
-
-        db.all(query, queryParams, (err, rows) => {
-            if (err) {
-                console.error('Error executing query:', err.message);
-                return res.status(500).json({ success: false, message: 'Database error' });
-            }
-            res.json({ success: true, posts: rows });
-        });
+    } catch (err) {
+        console.error('Error executing query:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
     }
 });
 
 
-app.get('/searchUser', (req, res) => {
-    const searchTerm = req.query.term ? `%${req.query.term.toLowerCase()}%` : '';
-    const userID = req.query.userID; // Get the logged-in user's ID from the request
+app.get('/searchUser', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const searchTerm = req.query.term ? `%${req.query.term.toLowerCase()}%` : '';
+        const userID = req.query.userID;
 
-
-    if (!searchTerm) {
-        return res.status(400).json({ success: false, message: 'Search term is required' });
-    }
-
-    if (!userID) {
-        return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-
-    // Prepare the query with placeholders for parameter binding
-    const query = `
-        SELECT 
-            userProfile.userID, 
-            userProfile.userFullName, 
-            userProfile.schoolID, 
-            userProfile.userGraduationYear,
-            school.schoolFullName
-        FROM 
-            userProfile
-        LEFT JOIN 
-            school ON userProfile.schoolID = school.schoolID
-        WHERE 
-            (LOWER(userProfile.userFullName) LIKE ? OR LOWER(school.schoolFullName) LIKE ?)
-            AND userProfile.userID != ?;  -- Exclude the logged-in user
-    `;
-
-    // Execute the query with the search term and logged-in user ID as parameters
-    db.all(query, [searchTerm, searchTerm, userID], (err, rows) => {
-        if (err) {
-            console.error('Error executing query', err);
-            return res.status(500).json({ success: false, message: 'Internal server error' });
+        if (!searchTerm) {
+            return res.status(400).json({ success: false, message: 'Search term is required' });
         }
 
-        res.json({
-            success: true,
-            users: rows
-        });
-    });
+        if (!userID) {
+            return res.status(400).json({ success: false, message: 'User ID is required' });
+        }
+
+        const query = `
+            SELECT 
+                userProfile.userID, 
+                userProfile.userFullName, 
+                userProfile.schoolID, 
+                userProfile.userGraduationYear,
+                school.schoolFullName
+            FROM 
+                userProfile
+            LEFT JOIN 
+                school ON userProfile.schoolID = school.schoolID
+            WHERE 
+                (LOWER(userProfile.userFullName) ILIKE $1 OR LOWER(school.schoolFullName) ILIKE $2)
+                AND userProfile.userID != $3;
+        `;
+
+        const result = await client.query(query, [searchTerm, searchTerm, userID]);
+        
+        res.json({ success: true, users: result.rows });
+
+    } catch (err) {
+        console.error('Error executing query:', err.message);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    } finally {
+        client.release();
+    }
 });
+
 
 
 
 // LOADING COMMENTS
-app.get('/comments', (req, res) => {
-    const { postID } = req.query;
+app.get('/comments', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { postID } = req.query;
 
-    if (!postID) {
-        return res.status(400).json({ success: false, message: 'Post ID is required' });
-    }
-
-    // Query to fetch comments and user roles
-    const query = `
-        SELECT c.commentID, c.postID, c.commentDate, c.commentText, c.commentingUserID, u.userRole
-        FROM comments c
-        JOIN userProfile u ON c.commentingUserID = u.userID
-        WHERE c.postID = ?
-        ORDER BY CASE 
-            WHEN u.userRole = 'm' THEN 0 
-            ELSE 1 
-        END, c.commentDate DESC
-    `;
-
-    db.all(query, [postID], (err, rows) => {
-        if (err) {
-            console.error('Error fetching comments:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
+        if (!postID) {
+            return res.status(400).json({ success: false, message: 'Post ID is required' });
         }
 
-        // Extract userIDs from comments
-        const userIDs = rows.map(comment => comment.commentingUserID);
-        const userQuery = 'SELECT userID, userFullName FROM userProfile WHERE userID IN (' + userIDs.map(() => '?').join(',') + ')';
+        // Fetch comments with user roles
+        const commentQuery = `
+            SELECT c.commentID, c.postID, c.commentDate, c.commentText, c.commentingUserID, u.userFullName, u.userRole
+            FROM comments c
+            JOIN userProfile u ON c.commentingUserID = u.userID
+            WHERE c.postID = $1
+            ORDER BY 
+                CASE WHEN u.userRole = 'm' THEN 0 ELSE 1 END, 
+                c.commentDate DESC
+        `;
 
-        db.all(userQuery, userIDs, (err, users) => {
-            if (err) {
-                console.error('Error fetching users:', err.message);
-                return res.status(500).json({ success: false, message: 'Database error' });
-            }
+        const { rows: comments } = await client.query(commentQuery, [postID]);
 
-            // Create a map of userID to userFullName for quick lookup
-            const userMap = new Map(users.map(user => [user.userID, user.userFullName]));
-
-            // Attach userFullName to each comment
-            const commentsWithUserNames = rows.map(comment => ({
-                ...comment,
-                userFullName: userMap.get(comment.commentingUserID) || 'Unknown'
-            }));
-
-            res.json(commentsWithUserNames);
-        });
-    });
+        res.json(comments);
+    } catch (err) {
+        console.error('Error fetching comments:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
+
 
 
 // ADDING NEW COMMENTS
-app.post('/add-comments', (req, res) => {
-    const { postID, commentText } = req.body;
-    const commentingUserID = req.session.userID; // Assuming user is authenticated and userID is stored in session
+app.post('/add-comments', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { postID, commentText } = req.body;
+        const commentingUserID = req.session.userID; // Assuming user is authenticated
 
-    if (!postID || !commentText || !commentingUserID) {
-        return res.status(400).json({ success: false, message: 'Post ID, comment text, and user ID are required' });
-    }
-
-    const commentDate = new Date().toISOString(); // Get the current date and time in ISO format
-
-    // Correct the parameter order in the query
-    const query = 'INSERT INTO comments (postID, commentDate, commentText, commentingUserID) VALUES (?, ?, ?, ?)';
-
-    db.run(query, [postID, commentDate, commentText, commentingUserID], function(err) {
-        if (err) {
-            console.error('Error inserting comment:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
+        if (!postID || !commentText || !commentingUserID) {
+            return res.status(400).json({ success: false, message: 'Post ID, comment text, and user ID are required' });
         }
 
-        res.json({ success: true, commentID: this.lastID }); // Return the ID of the newly inserted comment
-    });
+        const commentDate = new Date().toISOString(); // Get the current date and time in ISO format
+
+        const query = `
+            INSERT INTO comments (postID, commentDate, commentText, commentingUserID) 
+            VALUES ($1, $2, $3, $4) RETURNING commentID
+        `;
+
+        const { rows } = await client.query(query, [postID, commentDate, commentText, commentingUserID]);
+
+        res.json({ success: true, commentID: rows[0].commentID });
+
+    } catch (err) {
+        console.error('Error inserting comment:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
+
 
 // INSERTING RECORDS INTO LIKES
-app.post('/like', (req, res) => {
-    const { postID } = req.body;
-    const userID = req.session.userID; // Assuming user is authenticated and userID is stored in session
+app.post('/like', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { postID } = req.body;
+        const userID = req.session.userID; // Assuming user is authenticated
 
-    if (!postID || !userID) {
-        return res.status(400).json({ success: false, message: 'Post ID and user ID are required' });
-    }
-
-    const query = 'INSERT OR IGNORE INTO likes (postID, userID) VALUES (?, ?)';
-
-    db.run(query, [postID, userID], function(err) {
-        if (err) {
-            console.error('Error inserting like:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
+        if (!postID || !userID) {
+            return res.status(400).json({ success: false, message: 'Post ID and user ID are required' });
         }
+
+        const query = `
+            INSERT INTO likes (postID, userID) 
+            VALUES ($1, $2) 
+            ON CONFLICT (postID, userID) DO NOTHING
+        `;
+
+        await client.query(query, [postID, userID]);
 
         res.json({ success: true });
-    });
+
+    } catch (err) {
+        console.error('Error inserting like:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
+
 
 // GETTING THE NUMBER OF LIKES
-app.get('/like-count', (req, res) => {
-    const { postID } = req.query;
+app.get('/like-count', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { postID } = req.query;
 
-    if (!postID) {
-        return res.status(400).json({ success: false, message: 'Post ID is required' });
-    }
-
-    const query = `
-        SELECT COUNT(*) AS totalLikes
-        FROM likes
-        WHERE postID = ?
-    `;
-
-    db.get(query, [postID], (err, row) => {
-        if (err) {
-            console.error('Error fetching likes:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
+        if (!postID) {
+            return res.status(400).json({ success: false, message: 'Post ID is required' });
         }
 
-        res.json({ totalLikes: row.totalLikes });
-    });
+        const query = `
+            SELECT COUNT(*) AS totalLikes
+            FROM likes
+            WHERE postID = $1
+        `;
+
+        const { rows } = await client.query(query, [postID]);
+
+        res.json({ totalLikes: parseInt(rows[0].totalLikes) });
+
+    } catch (err) {
+        console.error('Error fetching likes:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
+
 
 // DELETING COMMENTS
-app.delete('/comments/:commentID', (req, res) => {
-    const commentID = req.params.commentID;
-    const userID = req.session.userID; // Assuming user is authenticated and userID is stored in session
+app.delete('/comments/:commentID', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const commentID = req.params.commentID;
+        const userID = req.session.userID; // Assuming user is authenticated
 
-    if (!commentID || !userID) {
-        return res.status(400).json({ success: false, message: 'Comment ID and user ID are required' });
-    }
-
-    // Check user's role
-    db.get('SELECT userRole FROM userProfile WHERE userID = ?', [userID], (err, row) => {
-        if (err) {
-            console.error('Error checking user role:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
+        if (!commentID || !userID) {
+            return res.status(400).json({ success: false, message: 'Comment ID and user ID are required' });
         }
 
-        if (!row) {
-            console.error('User not found:', userID);
-            return res.status(404).json({ success: false, message: 'User not found' });
+        // Get user role and comment author
+        const userQuery = `
+            SELECT u.userRole, c.commentingUserID 
+            FROM userProfile u
+            LEFT JOIN comments c ON c.commentID = $1
+            WHERE u.userID = $2
+        `;
+
+        const { rows } = await client.query(userQuery, [commentID, userID]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User or comment not found' });
         }
 
-        const userRole = row.userRole;
+        const { userRole, commentingUserID } = rows[0];
 
-        if (userRole === 'm') {
-            // Role "m" can delete any comment
-            db.run('DELETE FROM comments WHERE commentID = ?', [commentID], function(err) {
-                if (err) {
-                    console.error('Error deleting comment:', err.message);
-                    return res.status(500).json({ success: false, message: 'Database error' });
-                }
+        // Allow deletion for admins (`'m'`) or the comment's author
+        if (userRole === 'm' || commentingUserID === userID) {
+            const deleteQuery = `DELETE FROM comments WHERE commentID = $1`;
+            await client.query(deleteQuery, [commentID]);
 
-                res.json({ success: true });
-            });
-        } else if (userRole === 's') {
-            // Role "s" can only delete their own comments
-            db.get('SELECT commentingUserID FROM comments WHERE commentID = ?', [commentID], (err, row) => {
-                if (err) {
-                    console.error('Error fetching comment author:', err.message);
-                    return res.status(500).json({ success: false, message: 'Database error' });
-                }
-
-                if (!row) {
-                    console.error('Comment not found for commentID:', commentID);
-                    return res.status(404).json({ success: false, message: 'Comment not found' });
-                }
-
-                if (row.commentingUserID !== userID) {
-                    return res.status(403).json({ success: false, message: 'Not authorized to delete this comment' });
-                }
-
-                // User is authorized to delete their own comment
-                db.run('DELETE FROM comments WHERE commentID = ?', [commentID], function(err) {
-                    if (err) {
-                        console.error('Error deleting comment:', err.message);
-                        return res.status(500).json({ success: false, message: 'Database error' });
-                    }
-
-                    res.json({ success: true });
-                });
-            });
+            res.json({ success: true });
         } else {
-            res.status(403).json({ success: false, message: 'Not authorized to delete comments' });
+            res.status(403).json({ success: false, message: 'Not authorized to delete this comment' });
         }
-    });
+
+    } catch (err) {
+        console.error('Error deleting comment:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
+
 
 
 // FETCHING ROLE
-app.get('/userRole', (req, res) => {
-    const userID = req.session.userID; // Assuming user is authenticated and userID is stored in session
+app.get('/userRole', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const userID = req.session.userID; // Assuming user is authenticated
 
-    if (!userID) {
-        return res.status(401).json({ success: false, message: 'Not authenticated' });
-    }
-
-    const query = 'SELECT userRole FROM userProfile WHERE userID = ?';
-    db.get(query, [userID], (err, row) => {
-        if (err) {
-            console.error('Error fetching user role:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
+        if (!userID) {
+            return res.status(401).json({ success: false, message: 'Not authenticated' });
         }
 
-        if (!row) {
+        const query = 'SELECT userRole FROM userProfile WHERE userID = $1';
+        const { rows } = await client.query(query, [userID]);
+
+        if (rows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        res.json({ role: row.userRole, userID: userID });
-    });
+        res.json({ role: rows[0].userRole, userID });
+
+    } catch (err) {
+        console.error('Error fetching user role:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
+
 
 
 
 // DELETING POSTS
-app.delete('/posts/:postID', (req, res) => {
-    const postID = req.params.postID;
-    const userID = req.session.userID; // Assuming user is authenticated and userID is stored in session
+app.delete('/posts/:postID', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const postID = req.params.postID;
+        const userID = req.session.userID; // Assuming user is authenticated
 
-    if (!postID || !userID) {
-        return res.status(400).json({ success: false, message: 'Post ID and user ID are required' });
-    }
-
-    console.log('Session userID:', userID);
-
-    // Check user's role
-    db.get('SELECT userRole FROM userProfile WHERE userID = ?', [userID], (err, row) => {
-        if (err) {
-            console.error('Error checking user role:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
+        if (!postID || !userID) {
+            return res.status(400).json({ success: false, message: 'Post ID and user ID are required' });
         }
 
-        console.log('User role:', row.userRole);
-        const userRole = row.userRole;
-        
+        console.log('Session userID:', userID);
 
-        if (userRole === 'm') {
-            // Role "m" can delete any post
-            db.run('DELETE FROM post WHERE postID = ?', [postID], function(err) {
-                if (err) {
-                    console.error('Error deleting post:', err.message);
-                    return res.status(500).json({ success: false, message: 'Database error' });
-                }
+        // Fetch user role and post author in a single query
+        const userQuery = `
+            SELECT u.userRole, p.userID AS postAuthor 
+            FROM userProfile u
+            LEFT JOIN post p ON p.postID = $1
+            WHERE u.userID = $2
+        `;
 
-                // Also delete associated comments
-                db.run('DELETE FROM comments WHERE postID = ?', [postID], function(err) {
-                    if (err) {
-                        console.error('Error deleting comments:', err.message);
-                        return res.status(500).json({ success: false, message: 'Database error' });
-                    }
+        const { rows } = await client.query(userQuery, [postID, userID]);
 
-                    res.json({ success: true });
-                });
-            });
-        } else if (userRole === 's') {
-            // Role "s" can only delete their own posts
-            db.get('SELECT userID FROM post WHERE postID = ?', [postID], (err, row) => {
-                if (err) {
-                    console.error('Error fetching post author:', err.message);
-                    return res.status(500).json({ success: false, message: 'Database error' });
-                }
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User or post not found' });
+        }
 
-                if (row.userID !== userID) {
-                    return res.status(403).json({ success: false, message: 'Not authorized to delete this post' });
-                }
+        const { userRole, postAuthor } = rows[0];
 
-                // User is authorized to delete their own post
-                db.run('DELETE FROM post WHERE postID = ?', [postID], function(err) {
-                    if (err) {
-                        console.error('Error deleting post:', err.message);
-                        return res.status(500).json({ success: false, message: 'Database error' });
-                    }
+        if (userRole === 'm' || postAuthor === userID) {
+            // Delete comments first, then the post (maintain referential integrity)
+            await client.query('DELETE FROM comments WHERE postID = $1', [postID]);
+            await client.query('DELETE FROM post WHERE postID = $1', [postID]);
 
-                    // Also delete associated comments
-                    db.run('DELETE FROM comments WHERE postID = ?', [postID], function(err) {
-                        if (err) {
-                            console.error('Error deleting comments:', err.message);
-                            return res.status(500).json({ success: false, message: 'Database error' });
-                        }
-
-                        res.json({ success: true });
-                    });
-                });
-            });
+            res.json({ success: true });
         } else {
-            res.status(403).json({ success: false, message: 'Not authorized to delete posts' });
+            res.status(403).json({ success: false, message: 'Not authorized to delete this post' });
         }
-    });
+
+    } catch (err) {
+        console.error('Error deleting post:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
+
 
 
 
 // Route to fetch user information and their posts
-app.get('/user-info/:userID', (req, res) => {
-    const userID = req.params.userID; // Fetch userID from URL parameters
+app.get('/user-info/:userID', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const userID = req.params.userID;
 
-    if (!userID) {
-        console.error('User ID not provided');
-        return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-
-    db.get(`SELECT userProfile.userID, userProfile.userFullName, userProfile.userGraduationYear, school.schoolFullName
-            FROM userProfile
-            INNER JOIN school ON userProfile.schoolID = school.schoolID
-            WHERE userProfile.userID = ?`, [userID], (err, row) => {
-        if (err) {
-            console.error('Error fetching user info:', err.message);
-            return res.status(500).json({ success: false, message: 'Database error' });
+        if (!userID) {
+            console.error('User ID not provided');
+            return res.status(400).json({ success: false, message: 'User ID is required' });
         }
 
-        if (!row) {
+        const query = `
+            SELECT u.userID, u.userFullName, u.userGraduationYear, s.schoolFullName
+            FROM userProfile u
+            INNER JOIN school s ON u.schoolID = s.schoolID
+            WHERE u.userID = $1
+        `;
+
+        const { rows } = await client.query(query, [userID]);
+
+        if (rows.length === 0) {
             console.error('User not found');
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        res.json({
-            success: true,
-            userID: row.userID,
-            userFullName: row.userFullName,
-            userGraduationYear: row.userGraduationYear,
-            schoolFullName: row.schoolFullName
-        });
-    });
+        res.json({ success: true, ...rows[0] });
+
+    } catch (err) {
+        console.error('Error fetching user info:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
 
 
 
-app.get('/user-statistics/:userID', (req, res) => {
-    const userID = req.params.userID;
+app.get('/user-statistics/:userID', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const userID = req.params.userID;
 
-    // Query to get the total number of posts by the user
-    const totalPostsQuery = 'SELECT COUNT(*) AS totalPosts FROM post WHERE userID = ?';
+        const totalPostsQuery = 'SELECT COUNT(*) AS "totalPosts" FROM post WHERE userID = $1';
 
-    
-    // Query to get the number of posts by CAS category
-    const postsByCategoryQuery = `
-    SELECT postCASCategoryID, COUNT(*) AS count
-    FROM post
-    WHERE userID = ?
-    GROUP BY postCASCategoryID;
-    `;    
+        const postsByCategoryQuery = `
+            SELECT postCASCategoryID, COUNT(*) AS count
+            FROM post
+            WHERE userID = $1
+            GROUP BY postCASCategoryID
+        `;
 
-    // Execute the queries
-    db.get(totalPostsQuery, [userID], (err, totalPostsResult) => {
-        if (err) {
-            console.error('Error fetching total posts count:', err);
-            return res.status(500).json({ error: 'Error fetching total posts count' });
-        }
-        
-        db.all(postsByCategoryQuery, [userID], (err, postsByCategoryResult) => {
-            if (err) {
-                console.error('Error fetching posts by category:', err);
-                return res.status(500).json({ error: 'Error fetching posts by category' });
-            }
-                
-            res.json({ success: true, totalPosts: totalPostsResult.totalPosts, postsByCategory: postsByCategoryResult});
+        const totalPostsResult = await client.query(totalPostsQuery, [userID]);
+        const postsByCategoryResult = await client.query(postsByCategoryQuery, [userID]);
 
+        res.json({ 
+            success: true, 
+            totalPosts: totalPostsResult.rows[0].totalPosts, 
+            postsByCategory: postsByCategoryResult.rows 
         });
-    });
+
+    } catch (err) {
+        console.error('Error fetching user statistics:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        client.release();
+    }
 });
 
 
 
 app.post('/api/friends/request', async (req, res) => {
-    const { userAddresserID, userAddresseeID } = req.body;
-
+    const client = await pool.connect();
     try {
-        await db.run('INSERT INTO friends (userAddresserID, userAddresseeID, statusID) VALUES (?, ?, ?)', [
-            userAddresserID,
-            userAddresseeID,
-            'p'
-        ]);
+        const { userAddresserID, userAddresseeID } = req.body;
 
-        res.status(200).send({ message: 'Friend request sent' });
-    } catch (error) {
-        console.error('Error sending friend request:', error);
-        res.status(500).send({ error: 'Failed to send friend request' });
+        const query = `
+            INSERT INTO friends (userAddresserID, userAddresseeID, statusID)
+            VALUES ($1, $2, 'p')
+        `;
+
+        await client.query(query, [userAddresserID, userAddresseeID]);
+
+        res.status(200).json({ message: 'Friend request sent' });
+
+    } catch (err) {
+        console.error('Error sending friend request:', err);
+        res.status(500).json({ error: 'Failed to send friend request' });
+    } finally {
+        client.release();
     }
 });
 
-app.get('/check-status', (req, res) => {
-    const { userAddresserID, userAddresseeID } = req.query;
 
-    if (!userAddresserID || !userAddresseeID) {
-        return res.status(400).json({ error: 'Both userAddresserID and userAddresseeID are required' });
-    }
+app.get('/check-status', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { userAddresserID, userAddresseeID } = req.query;
 
-    const query = `
-    SELECT statusID, userAddresserID, userAddresseeID
-    FROM friends
-    WHERE (userAddresserID = ? AND userAddresseeID = ?)
-       OR (userAddresserID = ? AND userAddresseeID = ?)
-    `;
-
-
-    const params = [userAddresserID, userAddresseeID, userAddresseeID, userAddresserID];
-
-    db.get(query, params, (err, row) => {
-        if (err) {
-            console.error('Database error:', err.message);
-            return res.status(500).json({ error: 'Database error' });
+        if (!userAddresserID || !userAddresseeID) {
+            return res.status(400).json({ error: 'Both userAddresserID and userAddresseeID are required' });
         }
-    
-        // Handle possible friendship statuses
-        if (row) {
-            const status = row.statusID;
-            const addresserID = row.userAddresserID;
-            const addresseeID = row.userAddresseeID;
-            if (['p', 'a', 'd'].includes(status)) {
-                res.json({ status, userAddresserID: addresserID, userAddresseeID: addresseeID });
-            } else {
-                console.error('Unexpected status value:', status);
-                res.json({ status: 'd', userAddresserID, userAddresseeID }); // Default to 'd' if status is unexpected
-            }
+
+        const query = `
+            SELECT statusID, userAddresserID, userAddresseeID
+            FROM friends
+            WHERE (userAddresserID = $1 AND userAddresseeID = $2)
+               OR (userAddresserID = $2 AND userAddresseeID = $1)
+        `;
+
+        const { rows } = await client.query(query, [userAddresserID, userAddresseeID]);
+
+        if (rows.length > 0) {
+            res.json({ status: rows[0].statusid, userAddresserID: rows[0].useraddresserid, userAddresseeID: rows[0].useraddresseeid });
         } else {
-            // If no row is found, assume users are not friends
             res.json({ status: 'd', userAddresserID, userAddresseeID });
         }
-    });
-});    
+
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        client.release();
+    }
+});
+
 
 
 app.post('/api/friends/respond', async (req, res) => {
-    const { userAddresserID, userAddresseeID, action } = req.body;
-
-    console.log(`Received action: ${action} from ${userAddresseeID} to ${userAddresserID}`);
-
+    const client = await pool.connect();
     try {
-        let statusID;
-        if (action === 'accept') {
-            statusID = 'a'; // accepted
-        } else if (action === 'decline') {
-            // We’ll delete the declined request instead of updating the status
-            console.log(`Deleting declined friend request between ${userAddresserID} and ${userAddresseeID}`);
-            
-            db.run(`
-                DELETE FROM friends
-                WHERE (userAddresserID = ? AND userAddresseeID = ?)
-                   OR (userAddresserID = ? AND userAddresseeID = ?)
-            `, [userAddresserID, userAddresseeID, userAddresseeID, userAddresserID], function (err) {
-                if (err) {
-                    console.error('Error deleting declined request:', err);
-                    return res.status(500).send({ error: 'Database error during DELETE' });
-                }
+        const { userAddresserID, userAddresseeID, action } = req.body;
 
-                console.log(`Delete successful: ${this.changes} rows affected`);
-
-                if (this.changes > 0) {
-                    res.status(200).send({ message: `Friend request declined and removed successfully` });
-                } else {
-                    res.status(400).send({ error: 'Failed to delete declined friend request' });
-                }
-            });
-            return; // Exit here since decline action is handled
-        } else {
-            return res.status(400).send({ error: 'Invalid action' });
+        if (!userAddresserID || !userAddresseeID || !['accept', 'decline'].includes(action)) {
+            return res.status(400).json({ error: 'Invalid input' });
         }
 
-        // Proceed with accepting the request if action was 'accept'
-        console.log(`Checking if relationship exists between ${userAddresserID} and ${userAddresseeID}...`);
-        
-        db.get(`
-            SELECT * FROM friends
-            WHERE (userAddresserID = ? AND userAddresseeID = ?)
-               OR (userAddresserID = ? AND userAddresseeID = ?)
-        `, [userAddresserID, userAddresseeID, userAddresseeID, userAddresserID], function (err, row) {
-            if (err) {
-                console.error('Error checking relationship:', err);
-                return res.status(500).send({ error: 'Database error during SELECT' });
-            }
+        if (action === 'decline') {
+            const deleteQuery = `
+                DELETE FROM friends
+                WHERE (userAddresserID = $1 AND userAddresseeID = $2)
+                   OR (userAddresserID = $2 AND userAddresseeID = $1)
+            `;
+            const result = await client.query(deleteQuery, [userAddresserID, userAddresseeID]);
+            return res.json({ message: result.rowCount > 0 ? 'Friend request declined' : 'No request found' });
+        }
 
-            if (row) {
-                // Relationship exists, we should update it
-                console.log(`Relationship found between ${userAddresserID} and ${userAddresseeID}. Updating status to ${statusID}.`);
-                
-                db.run(`
-                    UPDATE friends
-                    SET statusID = ?
-                    WHERE (userAddresserID = ? AND userAddresseeID = ?)
-                       OR (userAddresserID = ? AND userAddresseeID = ?)
-                `, [statusID, userAddresserID, userAddresseeID, userAddresseeID, userAddresserID], function (err) {
-                    if (err) {
-                        console.error('Error updating relationship:', err);
-                        return res.status(500).send({ error: 'Database error during UPDATE' });
-                    }
+        // Accept the friend request
+        const updateQuery = `
+            UPDATE friends
+            SET statusID = 'a'
+            WHERE (userAddresserID = $1 AND userAddresseeID = $2)
+               OR (userAddresserID = $2 AND userAddresseeID = $1)
+        `;
+        const updateResult = await client.query(updateQuery, [userAddresserID, userAddresseeID]);
 
-                    console.log(`Update successful: ${this.changes} rows affected`);
+        res.json({ message: updateResult.rowCount > 0 ? 'Friend request accepted' : 'No request found' });
 
-                    if (this.changes > 0) {
-                        res.status(200).send({ message: `Friend request accepted successfully` });
-                    } else {
-                        res.status(400).send({ error: 'Failed to update friend request' });
-                    }
-                });
-            } else {
-                // No existing relationship, create a new friend request
-                console.log(`No relationship found between ${userAddresserID} and ${userAddresseeID}. Inserting new friend request with status ${statusID}.`);
-                
-                db.run(`
-                    INSERT INTO friends (userAddresserID, userAddresseeID, statusID)
-                    VALUES (?, ?, ?)
-                `, [userAddresserID, userAddresseeID, statusID], function (err) {
-                    if (err) {
-                        console.error('Error inserting new relationship:', err);
-                        return res.status(500).send({ error: 'Database error during INSERT' });
-                    }
-
-                    console.log(`New friend request inserted: ${this.changes} row(s) affected`);
-                    res.status(200).send({ message: `Friend request sent successfully` });
-                });
-            }
-        });
-    } catch (error) {
-        console.error('Error responding to friend request:', error);
-        res.status(500).send({ error: 'An error occurred' });
+    } catch (err) {
+        console.error('Error responding to friend request:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        client.release();
     }
 });
+
 
 
 // Endpoint to get the three latest friends
 // Updated endpoint to get the three latest friends with their names and IDs
 app.get('/api/friends/latest/:userID', async (req, res) => {
-    const { userID } = req.params;
-
+    const client = await pool.connect();
     try {
+        const { userID } = req.params;
+
         const query = `
             SELECT u.userID, u.userFullName
             FROM friends f
-            JOIN userProfile u ON u.userID = CASE
-                WHEN f.userAddresserID = ? THEN f.userAddresseeID
-                ELSE f.userAddresserID
-            END
-            WHERE (f.userAddresserID = ? OR f.userAddresseeID = ?)
+            JOIN userProfile u ON u.userID = 
+                CASE WHEN f.userAddresserID = $1 THEN f.userAddresseeID ELSE f.userAddresserID END
+            WHERE (f.userAddresserID = $1 OR f.userAddresseeID = $1)
             AND f.statusID = 'a'
             ORDER BY f.friendshipID DESC
             LIMIT 3
         `;
 
-        db.all(query, [userID, userID, userID], (err, rows) => {
-            if (err) {
-                console.error('Error fetching latest friends with names:', err);
-                return res.status(500).send({ success: false, error: 'Database error' });
-            }
+        const { rows } = await client.query(query, [userID]);
+        res.json({ success: true, friends: rows });
 
-            res.status(200).send({ success: true, friends: rows });
-        });
-    } catch (error) {
-        console.error('Error in /api/friends/latest:', error);
-        res.status(500).send({ success: false, error: 'An error occurred' });
+    } catch (err) {
+        console.error('Error fetching latest friends:', err);
+        res.status(500).json({ success: false, error: 'Database error' });
+    } finally {
+        client.release();
     }
 });
+
 
 
 
 // Endpoint to create a notification
 // Endpoint to create a notification
 app.post('/api/sendNotifications', async (req, res) => {
-    const { userID, notificationType, actorID, postID } = req.body;
-
-    if (!userID || !notificationType) {
-        return res.status(400).send({ error: 'userID and notificationType are required' });
-    }
-
-    if (userID === actorID) {
-        // No notification needed, return early
-        return res.status(200).send({ message: 'No notification created: userID and actorID are the same' });
-    }
-
+    const client = await pool.connect();
     try {
-        await db.run(
-            'INSERT INTO notifications (userID, notificationType, actorID, postID) VALUES (?, ?, ?, ?)',
-            [userID, notificationType, actorID, postID]
-        );
+        const { userID, notificationType, actorID, postID } = req.body;
 
-        res.status(200).send({ message: 'Notification created' });
-    } catch (error) {
-        console.error('Error creating notification:', error);
-        res.status(500).send({ error: 'Failed to create notification' });
+        if (!userID || !notificationType) {
+            return res.status(400).json({ error: 'userID and notificationType are required' });
+        }
+
+        if (userID === actorID) {
+            return res.status(200).json({ message: 'No notification created: userID and actorID are the same' });
+        }
+
+        const query = `
+            INSERT INTO notifications (userID, notificationType, actorID, postID)
+            VALUES ($1, $2, $3, $4)
+        `;
+
+        await client.query(query, [userID, notificationType, actorID, postID]);
+
+        res.status(200).json({ message: 'Notification created' });
+
+    } catch (err) {
+        console.error('Error creating notification:', err);
+        res.status(500).json({ error: 'Database error' });
+    } finally {
+        client.release();
     }
 });
+
 
 // Endpoint to get notifications for a user
 app.get('/api/getNotifications', async (req, res) => {
     const { userID } = req.query;
 
+    if (!userID) {
+        return res.status(400).json({ error: 'User ID is required' });
+    }
+
     try {
-        // Validate userID
-        if (!userID) {
-            return res.status(400).json({ error: 'User ID is required' });
-        }
+        const { rows } = await pool.query(`
+            SELECT n.*, u.userFullName
+            FROM notifications n
+            JOIN userProfile u ON n.actorID = u.userID
+            WHERE n.userID = $1 
+            ORDER BY n.notificationTime DESC;
+        `, [userID]);
 
-        // Query the database
-        const notifications = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT n.*, u.userFullName
-                FROM notifications n
-                JOIN userProfile u ON n.actorID = u.userID
-                WHERE n.userID = ? 
-                ORDER BY n.notificationTime DESC;
-            `, [userID], (err, rows) => {
-                if (err) {
-                    return reject(err);
-                }
-                resolve(rows);
-            });
-        });
-
-        // Check if notifications is an array
-        if (Array.isArray(notifications)) {
-            res.status(200).json(notifications);
-        } else {
-            console.error('Invalid notifications data: Not an array');
-            res.status(500).json({ error: 'Invalid notifications data' });
-        }
+        res.status(200).json(rows);
     } catch (error) {
         console.error('Error fetching notifications:', error);
-        res.status(500).send({ error: 'Failed to fetch notifications' });
+        res.status(500).json({ error: 'Failed to fetch notifications' });
     }
 });
 
 
 
 
-app.get('/api/getPostOwnerID', (req, res) => {
+app.get('/api/getPostOwnerID', async (req, res) => {
     const { postID } = req.query;
 
     if (!postID) {
         return res.status(400).json({ error: 'postID is required' });
     }
 
-    const query = 'SELECT userID FROM post WHERE postID = ?';
+    try {
+        const { rows } = await pool.query('SELECT userID FROM post WHERE postID = $1', [postID]);
 
-    db.get(query, [postID], (err, row) => {
-        if (err) {
-            console.error('Database error:', err.message);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
-        if (row) {
-            res.status(200).json({ userID: row.userID });
+        if (rows.length > 0) {
+            res.status(200).json({ userID: rows[0].userID });
         } else {
             res.status(404).json({ error: 'Post not found' });
         }
-    });
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
+
 
 
 
@@ -1240,36 +1119,45 @@ app.post('/change-password', async (req, res) => {
     const { userID, oldPassword, newPassword } = req.body;
 
     if (!userID || !oldPassword || !newPassword) {
-        return res.json({ success: false, message: 'All fields are required' });
+        return res.status(400).json({ success: false, message: 'All fields are required' });
     }
 
     try {
-        // Get the stored password hash for the user
-        db.get(`SELECT userPasswordHash FROM userProfile WHERE userID = ?`, [userID], async (err, row) => {
-            if (err || !row) return res.json({ success: false, message: 'User not found' });
+        // Start transaction
+        await pool.query('BEGIN');
 
-            // Compare old password with stored hash
-            const match = await bcrypt.compare(oldPassword, row.userPasswordHash);
-            if (!match) return res.json({ success: false, message: 'Incorrect old password' });
+        // Get stored password hash
+        const { rows } = await pool.query('SELECT userPasswordHash FROM userProfile WHERE userID = $1', [userID]);
 
-            // Hash the new password
-            const newHashedPassword = await bcrypt.hash(newPassword, 10);
+        if (rows.length === 0) {
+            await pool.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
 
-            // Update the password in the database
-            db.run(`UPDATE userProfile SET userPasswordHash = ? WHERE userID = ?`, [newHashedPassword, userID], function (err) {
-                if (err) return res.json({ success: false, message: 'Database error' });
+        const storedHash = rows[0].userPasswordHash;
 
-                res.json({ success: true, message: 'Password updated successfully' });
-            });
-        });
+        // Compare old password with stored hash
+        const match = await bcrypt.compare(oldPassword, storedHash);
+        if (!match) {
+            await pool.query('ROLLBACK');
+            return res.status(400).json({ success: false, message: 'Incorrect old password' });
+        }
+
+        // Hash the new password
+        const newHashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update the password
+        await pool.query('UPDATE userProfile SET userPasswordHash = $1 WHERE userID = $2', [newHashedPassword, userID]);
+
+        // Commit transaction
+        await pool.query('COMMIT');
+
+        res.status(200).json({ success: true, message: 'Password updated successfully' });
     } catch (error) {
+        await pool.query('ROLLBACK');
         console.error('Error changing password:', error);
-        res.json({ success: false, message: 'Internal server error' });
+        res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
 
 
-
-app.listen(process.env.PORT || 3000, () => {
-    console.log("On work")
-})
