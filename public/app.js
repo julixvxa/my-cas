@@ -1103,7 +1103,6 @@ function displaySearchResults(users) {
         userElement.innerHTML = `
             <p><strong>Name:</strong> ${user.userfullname}</p>
             <p><strong>School:</strong> ${user.schoolfullname}</p>
-            <p><strong>Graduation Year:</strong> ${user.userGraduationYear}</p>
             <button onclick="showOtherUserInfo('${user.userid}')">View Profile</button>
         `;
         resultsContainer.appendChild(userElement);
