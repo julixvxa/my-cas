@@ -1402,12 +1402,29 @@ async function showOtherUserInfo(userid = null) {
         }
 
         console.log('User Info:', userInfo);
+        let userInfoHTML = '';
 
-        document.getElementById('other-user-info').innerHTML = `
+        // Check if the user is a moderator
+        const isModerator = userInfo.userrole === 'm';
+
+        // If the user is a moderator, display the role first
+        if (isModerator) {
+            userInfoHTML += `<p><strong style="color: red">Moderator</strong></p>`;
+        }
+
+        // Construct user info HTML
+        userInfoHTML += `
             <p><strong>Full Name:</strong> ${userInfo.userfullname}</p>
-            <p><strong>School:</strong> ${userInfo.schoolfullname}</p>
-            <p><strong>Graduation Year:</strong> ${userInfo.usergraduationyear}</p>
+            <p><strong>School:</strong> ${userInfo.schoolfullname || 'N/A'}</p>
         `;
+
+        // If the user is not a moderator, show the graduation year
+        if (!isModerator) {
+            userInfoHTML += `<p><strong>Graduation Year:</strong> ${userInfo.usergraduationyear || 'N/A'}</p>`;
+        }
+
+        document.getElementById('other-user-info').innerHTML = userInfoHTML;
+
 
         await showLatestFriends(userid, currentUser);
 
