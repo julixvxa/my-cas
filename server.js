@@ -82,43 +82,36 @@ const saltRounds = 10;
 // register endpoint
 app.post('/register', async (req, res) => {
     const { schoolfullname, email, userfullname, password } = req.body;
-    const userid = email; // Assuming userid is the email
+    const userid = email;
 
     try {
-        // Check if the school already exists
-        const schoolResult = await pool.query('SELECT schoolid FROM school WHERE schoolfullname = $1', [schoolfullname]);
+        // Insert the new school since we assume the moderator is creating a new one
+        const insertSchoolResult = await pool.query(
+            'INSERT INTO school (schoolfullname) VALUES ($1) RETURNING schoolid',
+            [schoolfullname]
+        );
+        const schoolid = insertSchoolResult.rows[0].schoolid;
 
-        let schoolid;
-        if (schoolResult.rows.length === 0) {
-            // School does not exist, insert it
-            const insertSchoolResult = await pool.query(
-                'INSERT INTO school (schoolfullname) VALUES ($1) RETURNING schoolid',
-                [schoolfullname]
-            );
-            schoolid = insertSchoolResult.rows[0].schoolid;
-        } else {
-            // If school exists, get its id
-            schoolid = schoolResult.rows[0].schoolid;
-        }
+        console.log(`Assigned school ID: ${schoolid} for moderator: ${userid}`);
 
-        // Hash the password securely
+        // Hash the password
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Insert user data into userprofile table
+        // Insert moderator with the new school
         await pool.query(
             'INSERT INTO userprofile (userid, userfullname, userpasswordhash, schoolid, userrole) VALUES ($1, $2, $3, $4, $5)',
             [userid, userfullname, hashedPassword, schoolid, 'm']
         );
 
-        // Save session data
         req.session.userid = userid;
         res.json({ success: true });
 
     } catch (err) {
-        console.error('Error during registration:', err.message);
+        console.error('Error during moderator registration:', err.message);
         res.status(500).json({ success: false, message: 'Database error' });
     }
 });
+
 
 
 
@@ -415,39 +408,46 @@ app.get('/searchPosts', async (req, res) => {
     try {
         const searchTerm = (req.query.search || '').trim();
         const { categoryid, monthid, userid, privacyid, postid, currentUser, userrole } = req.query;
-        
+
         let query = `
             SELECT post.*
             FROM post
             INNER JOIN userprofile ON post.userid = userprofile.userid
             LEFT JOIN friends f ON (post.userid = f.useraddresseeid AND f.useraddresserid = $1) 
                                 OR (post.userid = f.useraddresserid AND f.useraddresseeid = $2)
-            WHERE 
-                (post.postprivacyid = 3) OR 
-                (post.postprivacyid = 2 AND (f.statusid = 'a' OR $3 = 'm' OR post.userid = $4)) OR 
-                (post.postprivacyid = 1 AND (post.userid = $5 OR $6 = 'm'))
+            WHERE 1=1
         `;
 
-        let queryParams = [currentUser, currentUser, userrole, currentUser, currentUser, userrole];
+        let queryParams = [currentUser, currentUser];
 
-        if (!searchTerm.length) {
-            if (categoryid) query += ' AND post.postcascategoryid = $' + (queryParams.push(categoryid));
-            if (monthid) query += ' AND post.postmonthid = $' + (queryParams.push(monthid));
-            if (privacyid) query += ' AND post.postprivacyid = $' + (queryParams.push(privacyid));
-            if (userid) query += ' AND post.userid = $' + (queryParams.push(userid));
-            if (postid) query += ' AND post.postid = $' + (queryParams.push(postid));
-
-            query += ' ORDER BY post.postdate DESC';
-        } else {
+        if (searchTerm.length) {
             const searchTerms = searchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
             if (!searchTerms.length) return res.status(400).json({ success: false, message: 'No valid search terms provided' });
 
-            const conditions = searchTerms.map((_, i) => `(post.posttext ILIKE $${queryParams.length + 1 + (i * 2)} OR userprofile.userfullname ILIKE $${queryParams.length + 2 + (i * 2)})`).join(' AND ');
-            queryParams.push(...searchTerms.flatMap(term => [`%${term}%`, `%${term}%`]));
+            const conditions = searchTerms.map((_, i) => `(post.posttext ILIKE $${queryParams.length + 1 + i} OR userprofile.userfullname ILIKE $${queryParams.length + 1 + i})`).join(' OR ');
+            queryParams.push(...searchTerms.map(term => `%${term}%`));
 
-            if (conditions.length) query += ' AND ' + conditions;
-            query += ' ORDER BY post.postdate DESC';
+            query += ` AND (${conditions})`;
         }
+
+        query += `
+            AND (
+                post.postprivacyid = 3 OR 
+                (post.postprivacyid = 2 AND (f.statusid = 'a' OR $${queryParams.length + 1} = 'm' OR post.userid = $${queryParams.length + 2})) OR 
+                (post.postprivacyid = 1 AND (post.userid = $${queryParams.length + 3} OR $${queryParams.length + 4} = 'm'))
+            )
+        `;
+
+        queryParams.push(userrole, currentUser, currentUser, userrole);
+
+        // ✅ Apply category, month, privacy, and user filters
+        if (categoryid) query += ' AND post.postcascategoryid = $' + (queryParams.push(categoryid));
+        if (monthid) query += ' AND post.postmonthid = $' + (queryParams.push(monthid));
+        if (privacyid) query += ' AND post.postprivacyid = $' + (queryParams.push(privacyid));
+        if (userid) query += ' AND post.userid = $' + (queryParams.push(userid));
+        if (postid && postid !== 'null') query += ' AND post.postid = $' + (queryParams.push(postid));
+
+        query += ' ORDER BY post.postdate DESC';
 
         console.log('SQL Query:', query);
         console.log('Query Parameters:', queryParams);
@@ -462,6 +462,7 @@ app.get('/searchPosts', async (req, res) => {
         client.release();
     }
 });
+
 
 
 
@@ -522,13 +523,13 @@ app.get('/comments', async (req, res) => {
 
         // Fetch comments with user roles
         const commentQuery = `
-            SELECT c.commentid, c.postid, c.commentDate, c.commentText, c.commentinguserid, u.userfullname, u.userrole
+            SELECT c.commentid, c.postid, c.commentdate, c.commenttext, c.commentinguserid, u.userfullname, u.userrole
             FROM comments c
             JOIN userprofile u ON c.commentinguserid = u.userid
             WHERE c.postid = $1
             ORDER BY 
                 CASE WHEN u.userrole = 'm' THEN 0 ELSE 1 END, 
-                c.commentDate DESC
+                c.commentdate DESC
         `;
 
         const { rows: comments } = await client.query(commentQuery, [postid]);
@@ -548,21 +549,21 @@ app.get('/comments', async (req, res) => {
 app.post('/add-comments', async (req, res) => {
     const client = await pool.connect();
     try {
-        const { postid, commentText } = req.body;
+        const { postid, commenttext } = req.body;
         const commentinguserid = req.session.userid; // Assuming user is authenticated
 
-        if (!postid || !commentText || !commentinguserid) {
+        if (!postid || !commenttext || !commentinguserid) {
             return res.status(400).json({ success: false, message: 'Post id, comment text, and user id are required' });
         }
 
-        const commentDate = new Date().toISOString(); // Get the current date and time in ISO format
+        const commentdate = new Date().toISOString(); // Get the current date and time in ISO format
 
         const query = `
-            INSERT INTO comments (postid, commentDate, commentText, commentinguserid) 
+            INSERT INTO comments (postid, commentdate, commenttext, commentinguserid) 
             VALUES ($1, $2, $3, $4) RETURNING commentid
         `;
 
-        const { rows } = await client.query(query, [postid, commentDate, commentText, commentinguserid]);
+        const { rows } = await client.query(query, [postid, commentdate, commenttext, commentinguserid]);
 
         res.json({ success: true, commentid: rows[0].commentid });
 
@@ -605,6 +606,7 @@ app.post('/like', async (req, res) => {
 });
 
 
+
 // GETTING THE NUMBER OF LIKES
 app.get('/like-count', async (req, res) => {
     const client = await pool.connect();
@@ -612,18 +614,18 @@ app.get('/like-count', async (req, res) => {
         const { postid } = req.query;
 
         if (!postid) {
-            return res.status(400).json({ success: false, message: 'Post id is required' });
+            return res.status(400).json({ success: false, message: 'Post ID is required' });
         }
 
         const query = `
-            SELECT COUNT(*) AS totalLikes
+            SELECT COUNT(*) AS totallikes
             FROM likes
             WHERE postid = $1
         `;
 
-        const { rows } = await client.query(query, [postid]);
+        const { rows } = await client.query(query, [Number(postid)]); // Convert postid to number if necessary
 
-        res.json({ totalLikes: parseInt(rows[0].totalLikes) });
+        res.json({ totallikes: parseInt(rows[0].totallikes, 10) }); // Ensure proper number conversion
 
     } catch (err) {
         console.error('Error fetching likes:', err.message);
@@ -632,6 +634,7 @@ app.get('/like-count', async (req, res) => {
         client.release();
     }
 });
+
 
 
 // DELETING COMMENTS
@@ -726,7 +729,7 @@ app.delete('/posts/:postid', async (req, res) => {
 
         // Fetch user role and post author in a single query
         const userQuery = `
-            SELECT u.userrole, p.userid AS postAuthor 
+            SELECT u.userrole, p.userid AS postauthor 
             FROM userprofile u
             LEFT JOIN post p ON p.postid = $1
             WHERE u.userid = $2
@@ -738,9 +741,9 @@ app.delete('/posts/:postid', async (req, res) => {
             return res.status(404).json({ success: false, message: 'User or post not found' });
         }
 
-        const { userrole, postAuthor } = rows[0];
+        const { userrole, postauthor } = rows[0];
 
-        if (userrole === 'm' || postAuthor === userid) {
+        if (userrole === 'm' || postauthor === userid) {
             // Delete comments first, then the post (maintain referential integrity)
             await client.query('DELETE FROM comments WHERE postid = $1', [postid]);
             await client.query('DELETE FROM post WHERE postid = $1', [postid]);
@@ -773,11 +776,12 @@ app.get('/user-info/:userid', async (req, res) => {
         }
 
         const query = `
-            SELECT u.userid, u.userfullname, u.usergraduationyear, s.schoolfullname
+            SELECT u.userid, u.userfullname, u.usergraduationyear, u.userrole, s.schoolfullname
             FROM userprofile u
-            INNER JOIN school s ON u.schoolid = s.schoolid
+            LEFT JOIN school s ON u.schoolid = s.schoolid
             WHERE u.userid = $1
         `;
+
 
         const { rows } = await client.query(query, [userid]);
 
@@ -1007,7 +1011,7 @@ app.get('/api/getNotifications', async (req, res) => {
             FROM notifications n
             JOIN userprofile u ON n.actorid = u.userid
             WHERE n.userid = $1 
-            ORDER BY n.notificationTime DESC;
+            ORDER BY n.notificationtime DESC;
         `, [userid]);
 
         res.status(200).json(rows);

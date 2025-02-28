@@ -601,7 +601,7 @@ async function handlePostCreation(event) {
 }
 
 // COMMENT SUBMISSIONS
-async function handleCommentSubmission(event, postid, postsOwneruserid) {
+async function handleCommentSubmission(event, postid, postsowneruserid) {
     event.preventDefault();
     const view = getCurrentView();
 
@@ -614,13 +614,13 @@ async function handleCommentSubmission(event, postid, postsOwneruserid) {
     }
 
     const form = event.target;
-    const commentText = form.commentText.value;
+    const commenttext = form.commenttext.value;
 
     try {
         const response = await fetch('/add-comments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postid, commentText })
+            body: JSON.stringify({ postid, commenttext })
         });
 
         const result = await response.json();
@@ -634,8 +634,8 @@ async function handleCommentSubmission(event, postid, postsOwneruserid) {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    userid: postsOwneruserid,
-                    notificationType: 'Comment',
+                    userid: postsowneruserid,
+                    notificationtype: 'Comment',
                     actorid: userid,
                     postid: postid
                 }),
@@ -652,7 +652,7 @@ async function handleCommentSubmission(event, postid, postsOwneruserid) {
                 console.log('Reloading posts for user-info view');
                 loadPost(null, userid, false); // Reload posts for the user's profile
             } else if (view === 'other-user-info'){
-                loadPost(null, postsOwneruserid, true)
+                loadPost(null, postsowneruserid, true)
             } else if (view === 'feed') {
                 console.log('Reloading posts for feed view');
                 loadPost(); // Reload posts for the feed view
@@ -696,7 +696,7 @@ async function likePost(postid) {
         userid = 'Unknown User'; // Handle error by providing a default or unknown user id
     }
 
-    const postOwnerid = await getPostOwnerid(postid);
+    const postownerid = await getPostOwnerid(postid);
 
     try {
         const response = await fetch('/like', {
@@ -715,8 +715,8 @@ async function likePost(postid) {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    userid: postOwnerid,
-                    notificationType: 'Like',
+                    userid: postownerid,
+                    notificationtype: 'Like',
                     actorid: userid,
                     postid: postid
                 }),
@@ -734,7 +734,7 @@ async function likePost(postid) {
                     console.log(view);
                     loadPost(null, userid);
                 } else if (view === 'other-user-info'){
-                        loadPost(null, postOwnerid, true)
+                        loadPost(null, postownerid, true)
                 } else if (view === 'feed'){
                     console.log(view);
                     loadPost();
@@ -752,9 +752,9 @@ async function likePost(postid) {
 
 
 // DELETING POSTS
-async function deletePost(postid, postsOwneruserid=null) {
+async function deletePost(postid, postsowneruserid=null) {
     const view = getCurrentView();
-    console.log(postsOwneruserid);
+    console.log(postsowneruserid);
 
 
     let userid;
@@ -779,7 +779,7 @@ async function deletePost(postid, postsOwneruserid=null) {
                 console.log('Reloading posts for user-info view');
                 loadPost(null, userid, false); // Reload posts for the user's profile
             } else if (view === 'other-user-info'){
-                loadPost(null, postsOwneruserid, true)
+                loadPost(null, postsowneruserid, true)
             } else if (view === 'feed') {
                 console.log('Reloading posts for feed view');
                 loadPost(); // Reload posts for the feed view
@@ -897,9 +897,11 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
 
         const mediaPromises = posts.map(post => fetch(`/media/${post.postid}`).then(res => res.ok ? res.json() : []));
         const commentsPromises = posts.map(post => fetch(`/comments?postid=${post.postid}`).then(res => res.ok ? res.json() : []));
-        const likesPromises = posts.map(post => fetch(`/like-count?postid=${post.postid}`).then(res => res.ok ? res.json() : { totalLikes: 0 }));
+        const likesPromises = posts.map(post => fetch(`/like-count?postid=${post.postid}`).then(res => res.ok ? res.json() : { totallikes: 0 }));
 
         const [mediaArray, commentsArray, likesArray] = await Promise.all([Promise.all(mediaPromises), Promise.all(commentsPromises), Promise.all(likesPromises)]);
+
+        console.log('Comments API Response:', commentsArray); // Debugging step
 
         const postElements = await Promise.all(posts.map(async (post, index) => {
             const postElement = document.createElement('div');
@@ -907,7 +909,7 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
 
             const media = mediaArray[index];
             const comments = commentsArray[index];
-            const likes = likesArray[index].totalLikes;
+            const likes = likesArray[index].totallikes;
             const userfullname = await fetchuserfullname(post.userid);
 
             let userfullnameLink;
@@ -955,15 +957,15 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
                         ${comments.length > 0 ? comments.map(comment => 
                             `<div class="comment">
                                 <div class="comment-author">${comment.userfullname}</div>
-                                <div class="comment-text">${comment.commentText}</div>
-                                <div class="comment-date">${convertUTCToLocal(comment.commentDate)}</div>
+                                <div class="comment-text">${comment.commenttext}</div>
+                                <div class="comment-date">${convertUTCToLocal(comment.commentdate)}</div>
                                 ${userRole === 'm' || (userRole === 's' && comment.commentinguserid === userRoleData.userid) ? 
                                     `<button onclick="deleteComment('${comment.commentid}', '${post.userid}', '${post.postid}')">Delete Comment</button>` : ''}
                             </div>`
                         ).join('') : '<p>No comments yet.</p>'}
                     </div>
                     <form onsubmit="handleCommentSubmission(event, '${post.postid}', '${post.userid}')">
-                        <textarea name="commentText" placeholder="Write your comment here..." required></textarea>
+                        <textarea name="commenttext" placeholder="Write your comment here..." required></textarea>
                         <div class="centered-buttons">
                             <button id="comment-submit" type="submit">Submit Comment</button>
                         </div>
@@ -1160,17 +1162,31 @@ async function showUserInfo(userid = null) {
         // Fetch user id if not provided
         if (!userid) {
             try {
-                userid = await getuserid(); // Await the result of the async function
+                userid = await getuserid();
                 console.log('Fetched User id:', userid);
             } catch (error) {
                 console.error('Error fetching user id:', error);
-                userid = 'Unknown User'; // Handle error by providing a default or unknown user id
+                userid = 'Unknown User';
             }
         } else {
             console.log('Provided User id:', userid);
         }
 
-        // Fetch user info for the specified userid
+        // Fetch user role
+        console.log(`Fetching role for userid: ${userid}`);
+        const roleResponse = await fetch('/userRole');
+        const roleData = await roleResponse.json();
+
+        if (!roleData.role) {
+            console.error('Error fetching user role');
+            document.getElementById('user-info').innerHTML = '<p>Error fetching user role.</p>';
+            return;
+        }
+
+        console.log('User Role:', roleData.role);
+        const isModerator = roleData.role === 'm';
+
+        // Fetch user info
         console.log(`Fetching user info for userid: ${userid}`);
         const response = await fetch(`/user-info/${userid}`);
         const userInfo = await response.json();
@@ -1182,33 +1198,43 @@ async function showUserInfo(userid = null) {
         }
 
         console.log('User Info:', userInfo);
+        let userInfoHTML = '';
 
-        // Display user information
-        document.getElementById('user-info').innerHTML = `
+        // If the user is a moderator, indicate their role first
+        if (isModerator) {
+            userInfoHTML += `<p><strong style="color: red">Moderator</strong></p>`;
+        }
+        
+        // Construct user info HTML
+        userInfoHTML += `
             <p><strong>Full Name:</strong> ${userInfo.userfullname}</p>
-            <p><strong>School:</strong> ${userInfo.schoolfullname}</p>
-            <p><strong>Graduation Year:</strong> ${userInfo.userGraduationYear}</p>
+            <p><strong>School:</strong> ${userInfo.schoolfullname || 'N/A'}</p>
         `;
+        
+        // If the user is not a moderator, show graduation year
+        if (!isModerator) {
+            userInfoHTML += `<p><strong>Graduation Year:</strong> ${userInfo.usergraduationyear || 'N/A'}</p>`;
+        }
 
+        document.getElementById('user-info').innerHTML = userInfoHTML;
+
+        // Show change password button only if viewing your own profile
         if (userid === userInfo.userid) {
             document.getElementById('change-password-btn').style.display = 'block';
             document.getElementById('change-password-btn').onclick = openPasswordModal;
         }
 
-        // Load the posts for this user
+        // Load user posts
         console.log(`Loading posts for userid: ${userInfo.userid}`);
         const posts = await loadPost(null, userInfo.userid, false);
 
         console.log('Posts loaded:', posts);
-
-        // Check if posts are in the expected format
         if (!Array.isArray(posts)) {
             console.error('Posts data is not an array:', posts);
             document.getElementById('my-info-container').innerHTML = '<p>Error loading posts.</p>';
             return;
         }
 
-        // Check if posts were loaded correctly
         if (posts.length === 0) {
             console.log('No posts found for userid:', userInfo.userid);
             document.getElementById('my-info-container').innerHTML = '<p>No posts available.</p>';
@@ -1218,13 +1244,13 @@ async function showUserInfo(userid = null) {
         console.log('Fetching user statistics for userid:', userid);
         await fetchUserStatistics(userid, false);
 
-        console.log('ziuuuuuuuuu');
-
     } catch (error) {
         console.error('Error in showUserInfo function:', error);
         document.getElementById('user-info').innerHTML = `<p>Error fetching user info.</p>`;
     }
 }
+
+
 
 // Function to open the password modal
 function openPasswordModal() {
@@ -1316,30 +1342,30 @@ async function showOtherUserInfo(userid = null) {
             const response = await fetch(`/check-status?userAddresserid=${currentUser}&userAddresseeid=${userid}`);
             const data = await response.json();
             const friendshipStatus = data.status;
-            const userAddresserid = data.userAddresserid;  
-            const userAddresseeid = data.userAddresseeid;  
-            console.log(`User Addressee id: ${userAddresseeid}`);
+            const useraddresserid = data.useraddresserid;  
+            const useraddresseeid = data.useraddresseeid;  
+            console.log(`User Addressee id: ${useraddresseeid}`);
 
             let acceptButton = null;
 
             console.log("Friendship status:", friendshipStatus);
 
             if (friendshipStatus === 'p') {
-                if (userAddresseeid === currentUser) {
+                if (useraddresseeid === currentUser) {
                     friendContainer.innerHTML = `<p>You received a friend request from this user</p>`;
 
                     acceptButton = document.createElement('button');
                     acceptButton.innerText = 'Accept';
                     acceptButton.addEventListener('click', async () => {
-                        console.log(`Accepting friend request from ${userAddresserid}`); 
-                        respondToFriendRequest('accept', userAddresserid);
+                        console.log(`Accepting friend request from ${useraddresserid}`); 
+                        respondToFriendRequest('accept', useraddresserid);
                     });
 
                     let declineButton = document.createElement('button');
                     declineButton.innerText = 'Decline';
                     declineButton.addEventListener('click', async () => {
-                        console.log(`Declining friend request from ${userAddresserid}`); 
-                        respondToFriendRequest('decline', userAddresserid);
+                        console.log(`Declining friend request from ${useraddresserid}`); 
+                        respondToFriendRequest('decline', useraddresserid);
                     });
 
                     friendContainer.appendChild(acceptButton);
@@ -1381,7 +1407,7 @@ async function showOtherUserInfo(userid = null) {
         document.getElementById('other-user-info').innerHTML = `
             <p><strong>Full Name:</strong> ${userInfo.userfullname}</p>
             <p><strong>School:</strong> ${userInfo.schoolfullname}</p>
-            <p><strong>Graduation Year:</strong> ${userInfo.userGraduationYear}</p>
+            <p><strong>Graduation Year:</strong> ${userInfo.usergraduationyear}</p>
         `;
 
         await showLatestFriends(userid, currentUser);
@@ -1424,24 +1450,24 @@ async function showOtherUserInfo(userid = null) {
 
 
 
-async function respondToFriendRequest(action, userAddresserid) {
+async function respondToFriendRequest(action, useraddresserid) {
     try {
-        const userAddresseeid = await getuserid(); // Get current user's id
-        console.log(`Responding to friend request: ${action} from ${userAddresserid} to ${userAddresseeid}`); // Added log
+        const useraddresseeid = await getuserid(); // Get current user's id
+        console.log(`Responding to friend request: ${action} from ${useraddresserid} to ${useraddresseeid}`); // Added log
 
         const response = await fetch('/api/friends/respond', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ userAddresserid, userAddresseeid, action }),
+            body: JSON.stringify({ useraddresserid, useraddresseeid, action }),
         });
 
         const result = await response.json();
 
         if (response.ok) {
             showCustomAlert(`Friend request ${action}ed successfully.`);
-            showOtherUserInfo(userAddresserid); // Refresh the user info panel
+            showOtherUserInfo(useraddresserid); // Refresh the user info panel
         } else {
             showCustomAlert(`Failed to ${action} the friend request: ${result.error}`);
         }
@@ -1485,7 +1511,7 @@ async function fetchUserStatistics(userid = null, other = false) {
         const postsByCategoryWithNames = await Promise.all(
             data.postsByCategory.map(async (category) => {
                 try {
-                    const categoryName = await fetchCategoryName(category.postCASCategoryid);
+                    const categoryName = await fetchCategoryName(category.postcascategoryid);
                     return { ...category, postCASCategory: categoryName };
                 } catch (error) {
                     console.error('Error fetching category name for category:', category, error);
@@ -1496,6 +1522,11 @@ async function fetchUserStatistics(userid = null, other = false) {
 
         console.log('Posts with category names:', postsByCategoryWithNames);
 
+        console.log('Final statistics object:', {
+            ...data,
+            postsByCategory: postsByCategoryWithNames
+        });
+        
         // Display user statistics
         displayUserStatistics({
             ...data,
@@ -1516,19 +1547,19 @@ async function fetchUserStatistics(userid = null, other = false) {
 }
 
 // FRIENDS
-async function sendFriendRequest(userAddresserid = null, userAddresseeid = null) {
+async function sendFriendRequest(useraddresserid = null, useraddresseeid = null) {
     try {
-        userAddresserid = await getuserid();
+        useraddresserid = await getuserid();
 
         const friendRequestResponse = await fetch('/api/friends/request', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ userAddresserid, userAddresseeid }),
+            body: JSON.stringify({ useraddresserid, useraddresseeid }),
         });
 
-        console.log("addresser" + userAddresserid);
+        console.log("addresser" + useraddresserid);
 
         if (friendRequestResponse.ok) {
             // Send notification
@@ -1538,15 +1569,15 @@ async function sendFriendRequest(userAddresserid = null, userAddresseeid = null)
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    userid: userAddresseeid,
-                    notificationType: 'Friend',
-                    actorid: userAddresserid,
+                    userid: useraddresseeid,
+                    notificationtype: 'Friend',
+                    actorid: useraddresserid,
                 }),
             });
 
             if (notificationResponse.ok) {
                 showCustomAlert('Friend request sent and notification created successfully');
-                showOtherUserInfo(userAddresseeid);
+                showOtherUserInfo(useraddresseeid);
             } else {
                 showCustomAlert('Friend request sent but failed to create notification');
             }
@@ -1620,7 +1651,7 @@ async function fetchNotifications() {
                     let seeMoreButton = null;
 
                     // Format notification message based on its type
-                    if (notification.notificationType === 'Like') {
+                    if (notification.notificationtype === 'Like') {
                         message = `Your post was liked by ${notification.userfullname}`;
                         if (notification.postid) {
                             seeMoreButton = document.createElement('button');
@@ -1641,7 +1672,7 @@ async function fetchNotifications() {
                         } else {
                             console.error('Postid is undefined for Like notification');
                         }
-                    } else if (notification.notificationType === 'Comment') {
+                    } else if (notification.notificationtype === 'Comment') {
                         message = `Your post received a comment from ${notification.userfullname}`;
                         if (notification.postid) {
                             seeMoreButton = document.createElement('button');
@@ -1662,7 +1693,7 @@ async function fetchNotifications() {
                         } else {
                             console.error('Postid is undefined for Comment notification');
                         }
-                    } else if (notification.notificationType === 'Friend') {
+                    } else if (notification.notificationtype === 'Friend') {
                         message = `You received a friend request from ${notification.userfullname}`;
                         seeMoreButton = document.createElement('button');
                         seeMoreButton.innerText = 'See Profile';
@@ -1670,12 +1701,12 @@ async function fetchNotifications() {
                             showOtherUserInfo(notification.actorid);
                         });
                     } else {
-                        message = `${notification.notificationType}`;
+                        message = `${notification.notificationtype}`;
                     }
 
                     // Add message in a paragraph element for easier styling
                     const notificationMessage = document.createElement('p');
-                    notificationMessage.textContent = `${message} at ${convertUTCToLocal(notification.notificationTime)}`;
+                    notificationMessage.textContent = `${message} at ${convertUTCToLocal(notification.notificationtime)}`;
                     notificationElement.appendChild(notificationMessage);
 
                     // Append "See More" button if it exists
@@ -1685,8 +1716,8 @@ async function fetchNotifications() {
 
                     notificationsContainer.appendChild(notificationElement);
 
-                    console.log('Original time:', notification.notificationTime);
-                    console.log('Converted time:', convertUTCToLocal(notification.notificationTime));
+                    console.log('Original time:', notification.notificationtime);
+                    console.log('Converted time:', convertUTCToLocal(notification.notificationtime));
                 });
             } else {
                 throw new Error('Invalid notifications data: Not an array');
