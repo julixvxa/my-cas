@@ -1339,7 +1339,7 @@ async function showOtherUserInfo(userid = null) {
                 return;
             }
 
-            const response = await fetch(`/check-status?userAddresserid=${currentUser}&userAddresseeid=${userid}`);
+            const response = await fetch(`/check-status?useraddresserid=${currentUser}&useraddresseeid=${userid}`);
             const data = await response.json();
             const friendshipStatus = data.status;
             const useraddresserid = data.useraddresserid;  

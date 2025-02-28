@@ -61,6 +61,28 @@ app.use((req, res, next) => {
 });
 */
 
+async function initializeDatabase() {
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            INSERT INTO friendshipstatus (statusid, statusname) VALUES
+                ('p', 'Pending'),
+                ('a', 'Accepted'),
+                ('d', 'Declined')
+            ON CONFLICT (statusid) DO NOTHING;
+        `);
+        console.log("Friendship status values inserted successfully.");
+    } catch (error) {
+        console.error("Error inserting initial friendship status values:", error);
+    } finally {
+        client.release();
+    }
+}
+
+// Call this function during server startup
+initializeDatabase();
+
+
 
 
 app.listen(port, () => {
