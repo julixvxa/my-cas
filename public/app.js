@@ -1,24 +1,24 @@
 
-// GETTING USER ID FROM SESSION
-async function getUserID() {
+// GETTING USER id FROM SESSION
+async function getuserid() {
     try {
-        const response = await fetch('/session-userID');
-        if (!response.ok) throw new Error('Failed to fetch user ID');
+        const response = await fetch('/session-userid');
+        if (!response.ok) throw new Error('Failed to fetch user id');
 
         const result = await response.json();
-        if (result.success) return result.userID;
+        if (result.success) return result.userid;
         else throw new Error('User not found');
     } catch (error) {
-        console.error('Error fetching user ID:', error);
+        console.error('Error fetching user id:', error);
         return null; // Return null in case of error
     }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Check if the user is logged in
-    const userID = await getUserID(); // or similar function to check login status
+    const userid = await getuserid(); // or similar function to check login status
 
-    if (userID) {
+    if (userid) {
         // User is logged in, show the feed panel
         showFeed();
     } else {
@@ -42,16 +42,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('logout-button').addEventListener('click', logout);
 
     document.getElementById('search-button').addEventListener('click', () => {
-        search(null, false); // Main feed search without userID
+        search(null, false); // Main feed search without userid
     });
 
     document.getElementById('search-button-my-info').addEventListener('click', async () => {
         try {
-            const userID = await getUserID();
-            search(userID, false); // Search for logged-in user's posts
+            const userid = await getuserid();
+            search(userid, false); // Search for logged-in user's posts
             console.log('search wywolane');
         } catch (error) {
-            console.error('Error fetching user ID from profile:', error);
+            console.error('Error fetching user id from profile:', error);
         }
     });
 
@@ -64,13 +64,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('search-clear-all-my-info').addEventListener('click', async () => {
         try {
-            const userID = await getUserID();
+            const userid = await getuserid();
             clearSearchFields(true, false);
-            loadPost(null, userID, false); // Reload posts for logged-in user
+            loadPost(null, userid, false); // Reload posts for logged-in user
             const resultsContainer = document.getElementById('search-results');
             resultsContainer.innerHTML = ''; // Clear previous results
         } catch (error) {
-            console.error('Error fetching user ID or performing search:', error);
+            console.error('Error fetching user id or performing search:', error);
         }
     });
     
@@ -99,14 +99,14 @@ function clearSearchFields(myInfo = false, otherInfo=false) {
     document.getElementById(`${suffix}search-privacy${prefix}`).value = '';
 }
 
-async function search(userID = null, other = false) {
+async function search(userid = null, other = false) {
     try {
         let prefix;
         let suffix;
-        if (!userID && (other === false)){ // main feed
+        if (!userid && (other === false)){ // main feed
             prefix = '';
             suffix = '';
-        } else if (userID && (other === false)){ // my info
+        } else if (userid && (other === false)){ // my info
             prefix = '-my-info';
             suffix = '';
         } else if (other === true){ // others info
@@ -126,18 +126,18 @@ async function search(userID = null, other = false) {
 
         let searchResult;
 
-        if (!userID && (other === false)) { //main feed
+        if (!userid && (other === false)) { //main feed
             searchResult = await searchPost(searchTerm, category, month, privacy, null, false, null);
             loadPost(searchResult);
             searchUser(searchTerm);
-        } else if (userID && (other === false)){
-            searchResult = await searchPost(searchTerm, category, month, privacy, userID, false);
-            loadPost(searchResult, userID, false, false);
-            console.log('Provided User ID:', userID);
+        } else if (userid && (other === false)){
+            searchResult = await searchPost(searchTerm, category, month, privacy, userid, false);
+            loadPost(searchResult, userid, false, false);
+            console.log('Provided User id:', userid);
         } else if (other === true){
-            searchResult = await searchPost(searchTerm, category, month, privacy, userID, true);
-            loadPost(searchResult, userID, true, false);
-            console.log('Provided User ID:', userID);
+            searchResult = await searchPost(searchTerm, category, month, privacy, userid, true);
+            loadPost(searchResult, userid, true, false);
+            console.log('Provided User id:', userid);
         }
 
     } catch (error) {
@@ -147,8 +147,8 @@ async function search(userID = null, other = false) {
 
 document.getElementById('search-clear-all-my-info').addEventListener('click', async () => {
     try {
-        // Fetch userID asynchronously
-        const userID = await getUserID();
+        // Fetch userid asynchronously
+        const userid = await getuserid();
         
         // Clear search input fields
         document.getElementById('search-bar-my-info').value = '';
@@ -157,9 +157,9 @@ document.getElementById('search-clear-all-my-info').addEventListener('click', as
         document.getElementById(`search-privacy-my-info`).value = '';
         
         // Reload posts (or perform the desired action)
-        loadPost(null, userID);
+        loadPost(null, userid);
     } catch (error) {
-        console.error('Error fetching user ID or performing search:', error);
+        console.error('Error fetching user id or performing search:', error);
     }
 });
 
@@ -177,22 +177,32 @@ function getCurrentView() {
     return 'unknown';
 }
 
-// TIME MANAGEMENT
 function convertUTCToLocal(dateString) {
-    let date;
-    if (dateString.includes('T')) {
-        date = new Date(dateString); // ISO 8601 format
-    } else {
-        date = new Date(dateString.replace(' ', 'T') + 'Z'); // Custom format (assuming UTC)
+    if (!dateString || typeof dateString !== 'string') {
+        console.error('Invalid date string:', dateString);
+        return 'Invalid Date';
     }
 
-    if (isNaN(date)) {
+    let date;
+    try {
+        if (dateString.includes('T')) {
+            date = new Date(dateString); // ISO 8601 format
+        } else {
+            date = new Date(dateString.replace(' ', 'T') + 'Z'); // Convert to ISO format (assuming UTC)
+        }
+    } catch (error) {
+        console.error('Error parsing date:', error, 'Original string:', dateString);
+        return 'Invalid Date';
+    }
+
+    if (isNaN(date.getTime())) { // Check if the date is valid
         console.error('Invalid date:', dateString);
         return 'Invalid Date';
     }
 
-    return date.toLocaleString();
+    return date.toLocaleString(); // Convert to local time
 }
+
 
 // Function to show the custom alert modal
 function showCustomAlert(message) {
@@ -297,20 +307,20 @@ function togglePasswordVisibility() {
     
     // Loop through each checkbox and toggle the associated password visibility
     checkboxes.forEach(checkbox => {
-        // Derive the password field ID by replacing 'show-' with 'password-'
-        const passwordFieldId = checkbox.id.replace('show-', ''); // Match the form-specific password field ID
+        // Derive the password field id by replacing 'show-' with 'password-'
+        const passwordFieldId = checkbox.id.replace('show-', ''); // Match the form-specific password field id
         const passwordField = document.querySelector(`#${passwordFieldId}`); // Find the corresponding password field
         
         // Log to help debug
-        console.log(`Checkbox ID: ${checkbox.id}`);
-        console.log(`Password field ID: ${passwordFieldId}`);
+        console.log(`Checkbox id: ${checkbox.id}`);
+        console.log(`Password field id: ${passwordFieldId}`);
         
         // Check if password field exists and toggle visibility
         if (passwordField) {
             passwordField.type = checkbox.checked ? 'text' : 'password';
             console.log(`Password type set to: ${passwordField.type}`);
         } else {
-            console.error(`Password field not found for ID: ${passwordFieldId}`);
+            console.error(`Password field not found for id: ${passwordFieldId}`);
         }
     });
 }
@@ -325,9 +335,9 @@ document.querySelectorAll('.show-password').forEach(checkbox => {
 async function handleRegistration(event) {
     event.preventDefault();
 
-    const schoolFullName = document.getElementById('register-school').value;
+    const schoolfullname = document.getElementById('register-school').value;
     const email = document.getElementById('register-email').value;
-    const userFullName = document.getElementById('register-fullname').value;
+    const userfullname = document.getElementById('register-fullname').value;
     const password = document.getElementById('register-password').value;
     const repeatPassword = document.getElementById('register-repeat-password').value;
     const errorMessage = document.getElementById('errorMessage');
@@ -344,7 +354,7 @@ async function handleRegistration(event) {
         const response = await fetch('/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ schoolFullName, email, userFullName, password })
+            body: JSON.stringify({ schoolfullname, email, userfullname, password })
         });
 
         if (!response.ok) {
@@ -469,7 +479,7 @@ async function logout() {
             throw new Error('Failed to log out');
         }
 
-        localStorage.removeItem('userID');
+        localStorage.removeItem('userid');
         displayPopupMessage('Logged out successfully');
         showLogin();
     } catch (error) {
@@ -480,17 +490,17 @@ async function logout() {
 
 
 // FETCHING CAS
-async function fetchCategoryName(categoryID) {
+async function fetchCategoryName(categoryid) {
     const categoryMap = {
         1: 'Creativity',
         2: 'Activity',
         3: 'Service'
     };
-    return categoryMap[categoryID] || 'Unknown';
+    return categoryMap[categoryid] || 'Unknown';
 }
 
 // FETCHING MONTHS
-async function fetchMonthName(monthID) {
+async function fetchMonthName(monthid) {
     const monthMap = {
         1: 'January',
         2: 'February',
@@ -505,28 +515,28 @@ async function fetchMonthName(monthID) {
         11: 'November',
         12: 'December'
     };
-    return monthMap[monthID] || 'Unknown';
+    return monthMap[monthid] || 'Unknown';
 }
 
-async function fetchPrivacyLevel(postPrivacyID) {
+async function fetchPrivacyLevel(postprivacyid) {
     const privacyMap = {
         '1': 'Me and Moderator Only',
         '2': 'Me and Friends',
         '3': 'Public'
     };
-    return privacyMap[postPrivacyID] || 'Unknown Privacy Level';
+    return privacyMap[postprivacyid] || 'Unknown Privacy Level';
 }
 
 // FETCHING FULL NAME
-async function fetchUserFullName(userID) {
+async function fetchuserfullname(userid) {
     try {
-        const response = await fetch(`/user/${userID}`);
+        const response = await fetch(`/user/${userid}`);
         if (!response.ok) {
             throw new Error('Failed to fetch user full name');
         }
         const result = await response.json();
         if (result.success) {
-            return result.userFullName;
+            return result.userfullname;
         } else {
             throw new Error('User not found');
         }
@@ -540,18 +550,18 @@ async function fetchUserFullName(userID) {
 async function handlePostCreation(event) {
     event.preventDefault();
 
-    const postText = document.getElementById('post-text').value;
-    const postCategory = document.getElementById('post-category').value;
-    const postMonth = document.getElementById('post-month').value;
-    const postPrivacy = document.getElementById('post-privacy').value;  // Get the selected privacy level
-    const mediaFiles = document.getElementById('post-media').files;
+    const posttext = document.getElementById('post-text').value;
+    const postcategory = document.getElementById('post-category').value;
+    const postmonth = document.getElementById('post-month').value;
+    const postprivacy = document.getElementById('post-privacy').value;  // Get the selected privacy level
+    const mediafiles = document.getElementById('post-media').files;
 
     const formData = new FormData();
-    formData.append('text', postText);
-    formData.append('category', postCategory);
-    formData.append('month', postMonth);
-    formData.append('privacy', postPrivacy);  // Include privacy level in the form data
-    for (const file of mediaFiles) {
+    formData.append('text', posttext);
+    formData.append('category', postcategory);
+    formData.append('month', postmonth);
+    formData.append('privacy', postprivacy);  // Include privacy level in the form data
+    for (const file of mediafiles) {
         formData.append('media', file);
     }
 
@@ -591,16 +601,16 @@ async function handlePostCreation(event) {
 }
 
 // COMMENT SUBMISSIONS
-async function handleCommentSubmission(event, postID, postsOwnerUserID) {
+async function handleCommentSubmission(event, postid, postsOwneruserid) {
     event.preventDefault();
     const view = getCurrentView();
 
-    let userID;
+    let userid;
     try {
-        userID = await getUserID(); // Await the result of the async function
+        userid = await getuserid(); // Await the result of the async function
     } catch (error) {
-        console.error('Error fetching user ID:', error);
-        userID = 'Unknown User'; // Handle error by providing a default or unknown user ID
+        console.error('Error fetching user id:', error);
+        userid = 'Unknown User'; // Handle error by providing a default or unknown user id
     }
 
     const form = event.target;
@@ -610,7 +620,7 @@ async function handleCommentSubmission(event, postID, postsOwnerUserID) {
         const response = await fetch('/add-comments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postID, commentText })
+            body: JSON.stringify({ postid, commentText })
         });
 
         const result = await response.json();
@@ -624,10 +634,10 @@ async function handleCommentSubmission(event, postID, postsOwnerUserID) {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    userID: postsOwnerUserID,
+                    userid: postsOwneruserid,
                     notificationType: 'Comment',
-                    actorID: userID,
-                    postID: postID
+                    actorid: userid,
+                    postid: postid
                 }),
             });
 
@@ -640,14 +650,14 @@ async function handleCommentSubmission(event, postID, postsOwnerUserID) {
             // Reload posts to reflect the new comment
             if (view === 'user-info') {
                 console.log('Reloading posts for user-info view');
-                loadPost(null, userID, false); // Reload posts for the user's profile
+                loadPost(null, userid, false); // Reload posts for the user's profile
             } else if (view === 'other-user-info'){
-                loadPost(null, postsOwnerUserID, true)
+                loadPost(null, postsOwneruserid, true)
             } else if (view === 'feed') {
                 console.log('Reloading posts for feed view');
                 loadPost(); // Reload posts for the feed view
             } else if (view === 'notifications'){
-                loadPost(await searchPost('', '', '', '', null, false, postID), null, false, true);
+                loadPost(await searchPost('', '', '', '', null, false, postid), null, false, true);
             }
         } else {
             console.error('Failed to submit comment:', result.message);
@@ -657,36 +667,36 @@ async function handleCommentSubmission(event, postID, postsOwnerUserID) {
     }
 }
 
-async function getPostOwnerID(postID) {
+async function getPostOwnerid(postid) {
     try {
-        const response = await fetch(`/api/getPostOwnerID?postID=${postID}`);
+        const response = await fetch(`/api/getPostOwnerid?postid=${postid}`);
         if (response.ok) {
             const data = await response.json();
-            return data.userID;
+            return data.userid;
         } else {
-            console.error('Failed to get post owner ID:', response.statusText);
+            console.error('Failed to get post owner id:', response.statusText);
             return null;
         }
     } catch (error) {
-        console.error('Error fetching post owner ID:', error);
+        console.error('Error fetching post owner id:', error);
         return null;
     }
 }
 
 
 // LIKING POSTS
-async function likePost(postID) {
+async function likePost(postid) {
     const view = getCurrentView();
 
-    let userID;
+    let userid;
     try {
-        userID = await getUserID(); // Await the result of the async function
+        userid = await getuserid(); // Await the result of the async function
     } catch (error) {
-        console.error('Error fetching user ID:', error);
-        userID = 'Unknown User'; // Handle error by providing a default or unknown user ID
+        console.error('Error fetching user id:', error);
+        userid = 'Unknown User'; // Handle error by providing a default or unknown user id
     }
 
-    const postOwnerID = await getPostOwnerID(postID);
+    const postOwnerid = await getPostOwnerid(postid);
 
     try {
         const response = await fetch('/like', {
@@ -694,7 +704,7 @@ async function likePost(postID) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ postID })
+            body: JSON.stringify({ postid })
         });
 
         if (response.ok) {
@@ -705,10 +715,10 @@ async function likePost(postID) {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    userID: postOwnerID,
+                    userid: postOwnerid,
                     notificationType: 'Like',
-                    actorID: userID,
-                    postID: postID
+                    actorid: userid,
+                    postid: postid
                 }),
             });
 
@@ -722,14 +732,14 @@ async function likePost(postID) {
             if (result.success) {
                 if (view === 'user-info'){
                     console.log(view);
-                    loadPost(null, userID);
+                    loadPost(null, userid);
                 } else if (view === 'other-user-info'){
-                        loadPost(null, postOwnerID, true)
+                        loadPost(null, postOwnerid, true)
                 } else if (view === 'feed'){
                     console.log(view);
                     loadPost();
                 } else if (view === 'notifications'){
-                    loadPost(await searchPost('', '', '', '', null, false, postID), null, false, true);
+                    loadPost(await searchPost('', '', '', '', null, false, postid), null, false, true);
                 }
             } else {
                 console.error('Failed to like the post:', result.message);
@@ -742,23 +752,23 @@ async function likePost(postID) {
 
 
 // DELETING POSTS
-async function deletePost(postID, postsOwnerUserID=null) {
+async function deletePost(postid, postsOwneruserid=null) {
     const view = getCurrentView();
-    console.log(postsOwnerUserID);
+    console.log(postsOwneruserid);
 
 
-    let userID;
+    let userid;
     try {
-        userID = await getUserID();
+        userid = await getuserid();
     } catch (error) {
-        console.error('Error fetching user ID:', error);
-        userID = 'Unknown User';
+        console.error('Error fetching user id:', error);
+        userid = 'Unknown User';
     }
 
     if (!confirm('Are you sure you want to delete this post?')) return;
 
     try {
-        const response = await fetch(`/posts/${postID}`, {
+        const response = await fetch(`/posts/${postid}`, {
             method: 'DELETE'
         });
 
@@ -767,14 +777,14 @@ async function deletePost(postID, postsOwnerUserID=null) {
             // Reload or update posts based on the current view
             if (view === 'user-info') {
                 console.log('Reloading posts for user-info view');
-                loadPost(null, userID, false); // Reload posts for the user's profile
+                loadPost(null, userid, false); // Reload posts for the user's profile
             } else if (view === 'other-user-info'){
-                loadPost(null, postsOwnerUserID, true)
+                loadPost(null, postsOwneruserid, true)
             } else if (view === 'feed') {
                 console.log('Reloading posts for feed view');
                 loadPost(); // Reload posts for the feed view
             } else if (view === 'notifications'){
-                loadPost(await searchPost('', '', '', '', null, false, postID), null, false, true);
+                loadPost(await searchPost('', '', '', '', null, false, postid), null, false, true);
             }
         } else {
             console.error('Failed to delete the post:', result.message);
@@ -786,21 +796,21 @@ async function deletePost(postID, postsOwnerUserID=null) {
 
 
 // DELETING COMMENTS
-async function deleteComment(commentID, postsOwnerUserID, postID) {
+async function deleteComment(commentid, postsOwneruserid, postid) {
     const view = getCurrentView();
 
-    let userID;
+    let userid;
     try {
-        userID = await getUserID();
+        userid = await getuserid();
     } catch (error) {
-        console.error('Error fetching user ID:', error);
-        userID = 'Unknown User';
+        console.error('Error fetching user id:', error);
+        userid = 'Unknown User';
     }
 
     if (!confirm('Are you sure you want to delete this comment?')) return;
 
     try {
-        const response = await fetch(`/comments/${commentID}`, {
+        const response = await fetch(`/comments/${commentid}`, {
             method: 'DELETE'
         });
 
@@ -809,14 +819,14 @@ async function deleteComment(commentID, postsOwnerUserID, postID) {
             // Reload or update posts based on the current view
             if (view === 'user-info') {
                 console.log('Reloading posts for user-info view');
-                loadPost(null, userID, false); // Reload posts for the user's profile
+                loadPost(null, userid, false); // Reload posts for the user's profile
             } else if (view === 'other-user-info'){
-                loadPost(null, postsOwnerUserID, true)
+                loadPost(null, postsOwneruserid, true)
             } else if (view === 'feed') {
                 console.log('Reloading posts for feed view');
                 loadPost(); // Reload posts for the feed view
             } else if (view === 'notifications'){
-                loadPost(await searchPost('', '', '', '', null, false, postID), null, false, true);
+                loadPost(await searchPost('', '', '', '', null, false, postid), null, false, true);
             }
         } else {
             console.error('Failed to delete the comment:', result.message);
@@ -854,14 +864,14 @@ function changeSlide(direction, carouselId) {
 
 
 
-async function loadPost(postsData = null, userID = null, other = false, notification = false) {
+async function loadPost(postsData = null, userid = null, other = false, notification = false) {
     try {
         const userRoleResponse = await fetch('/userRole');
         const userRoleData = await userRoleResponse.json();
         const userRole = userRoleData.role;
-        const currentUser = await getUserID();
+        const currentUser = await getuserid();
 
-        const posts = postsData || await (await fetch(userID ? `/postload?userID=${userID}&userRole=${userRole}&currentUser=${currentUser}` : `/postload?userRole=${userRole}&currentUser=${currentUser}`)).json();
+        const posts = postsData || await (await fetch(userid ? `/postload?userid=${userid}&userRole=${userRole}&currentUser=${currentUser}` : `/postload?userRole=${userRole}&currentUser=${currentUser}`)).json();
 
         if (!Array.isArray(posts)) {
             console.error('Posts data is not an array:', posts);
@@ -869,7 +879,7 @@ async function loadPost(postsData = null, userID = null, other = false, notifica
         }
 
         let postsContainer;
-        if (!userID) {
+        if (!userid) {
             postsContainer = notification ? document.getElementById('notification-post') : document.getElementById('posts-container');
         } else {
             postsContainer = other ? document.getElementById('other-my-info-container') : document.getElementById('my-info-container');
@@ -885,9 +895,9 @@ async function loadPost(postsData = null, userID = null, other = false, notifica
             return [];
         }
 
-        const mediaPromises = posts.map(post => fetch(`/media/${post.postID}`).then(res => res.ok ? res.json() : []));
-        const commentsPromises = posts.map(post => fetch(`/comments?postID=${post.postID}`).then(res => res.ok ? res.json() : []));
-        const likesPromises = posts.map(post => fetch(`/like-count?postID=${post.postID}`).then(res => res.ok ? res.json() : { totalLikes: 0 }));
+        const mediaPromises = posts.map(post => fetch(`/media/${post.postid}`).then(res => res.ok ? res.json() : []));
+        const commentsPromises = posts.map(post => fetch(`/comments?postid=${post.postid}`).then(res => res.ok ? res.json() : []));
+        const likesPromises = posts.map(post => fetch(`/like-count?postid=${post.postid}`).then(res => res.ok ? res.json() : { totalLikes: 0 }));
 
         const [mediaArray, commentsArray, likesArray] = await Promise.all([Promise.all(mediaPromises), Promise.all(commentsPromises), Promise.all(likesPromises)]);
 
@@ -898,34 +908,34 @@ async function loadPost(postsData = null, userID = null, other = false, notifica
             const media = mediaArray[index];
             const comments = commentsArray[index];
             const likes = likesArray[index].totalLikes;
-            const userFullName = await fetchUserFullName(post.userID);
+            const userfullname = await fetchuserfullname(post.userid);
 
-            let userFullNameLink;
-            if (userID === currentUser) {
-                userFullNameLink = `<a href="#" onclick="showUserInfo('${post.userID}')">${userFullName}</a>`;
+            let userfullnameLink;
+            if (userid === currentUser) {
+                userfullnameLink = `<a href="#" onclick="showUserInfo('${post.userid}')">${userfullname}</a>`;
             } else {
-                userFullNameLink = `<a href="#" onclick="showOtherUserInfo('${post.userID}')">${userFullName}</a>`;
+                userfullnameLink = `<a href="#" onclick="showOtherUserInfo('${post.userid}')">${userfullname}</a>`;
             }
 
-            const canDeletePost = userRole === 'm' || (userRole === 's' && post.userID === userRoleData.userID);
+            const canDeletePost = userRole === 'm' || (userRole === 's' && post.userid === userRoleData.userid);
 
-            const categoryName = await fetchCategoryName(post.postCASCategoryID);
-            const monthName = await fetchMonthName(post.postMonthID);
-            const privacyLevel = await fetchPrivacyLevel(post.postPrivacyID);
+            const categoryName = await fetchCategoryName(post.postcascategoryid);
+            const monthName = await fetchMonthName(post.postmonthid);
+            const privacyLevel = await fetchPrivacyLevel(post.postprivacyid);
 
-            console.log('Media for post', post.postID, media);
+            console.log('Media for post', post.postid, media);
 
             postElement.innerHTML = `
-                <div class="post-date">${convertUTCToLocal(post.postDate)}</div>
-                <h3 class="post-card-title">${userFullNameLink}</h3>
-                <div class="post-card-content">${post.postText}</div>
+                <div class="post-date">${convertUTCToLocal(post.postdate)}</div>
+                <h3 class="post-card-title">${userfullnameLink}</h3>
+                <div class="post-card-content">${post.posttext}</div>
                 <span class="post-tag">${categoryName}</span>
                 <div class="post-details">
                     <p>Month: ${monthName} | Privacy: ${privacyLevel}</p>
                 </div>
                 <div class="post-media">
                     ${media && media.length > 0 ? `
-                        <div class="carousel-container" id="carousel-${post.postID}">
+                        <div class="carousel-container" id="carousel-${post.postid}">
                         <div class="carousel">
                             <!-- Loop through media to create carousel items -->
                             ${media.map((m, index) => `
@@ -934,25 +944,25 @@ async function loadPost(postsData = null, userID = null, other = false, notifica
                             </div>
                             `).join('')}
                         </div>
-                        <button class="carousel-arrow left" onclick="changeSlide(-1, 'carousel-${post.postID}')">&#10094;</button>
-                        <button class="carousel-arrow right" onclick="changeSlide(1, 'carousel-${post.postID}')">&#10095;</button>
+                        <button class="carousel-arrow left" onclick="changeSlide(-1, 'carousel-${post.postid}')">&#10094;</button>
+                        <button class="carousel-arrow right" onclick="changeSlide(1, 'carousel-${post.postid}')">&#10095;</button>
                         </div>
                     ` : '<p>No media available.</p>'}
                 </div>
                 <div class="post-likes">Likes: ${likes}</div>
                 <div class="post-comments">
-                    <div class="comments-list" id="comments-${post.postID}">
+                    <div class="comments-list" id="comments-${post.postid}">
                         ${comments.length > 0 ? comments.map(comment => 
                             `<div class="comment">
-                                <div class="comment-author">${comment.userFullName}</div>
+                                <div class="comment-author">${comment.userfullname}</div>
                                 <div class="comment-text">${comment.commentText}</div>
                                 <div class="comment-date">${convertUTCToLocal(comment.commentDate)}</div>
-                                ${userRole === 'm' || (userRole === 's' && comment.commentingUserID === userRoleData.userID) ? 
-                                    `<button onclick="deleteComment('${comment.commentID}', '${post.userID}', '${post.postID}')">Delete Comment</button>` : ''}
+                                ${userRole === 'm' || (userRole === 's' && comment.commentinguserid === userRoleData.userid) ? 
+                                    `<button onclick="deleteComment('${comment.commentid}', '${post.userid}', '${post.postid}')">Delete Comment</button>` : ''}
                             </div>`
                         ).join('') : '<p>No comments yet.</p>'}
                     </div>
-                    <form onsubmit="handleCommentSubmission(event, '${post.postID}', '${post.userID}')">
+                    <form onsubmit="handleCommentSubmission(event, '${post.postid}', '${post.userid}')">
                         <textarea name="commentText" placeholder="Write your comment here..." required></textarea>
                         <div class="centered-buttons">
                             <button id="comment-submit" type="submit">Submit Comment</button>
@@ -960,12 +970,12 @@ async function loadPost(postsData = null, userID = null, other = false, notifica
                     </form>
                 </div>
                 <div class="panel-actions">
-                    <button onclick="likePost('${post.postID}')">Like</button>
-                    ${canDeletePost ? `<button onclick="deletePost('${post.postID}', '${post.userID}')">Delete Post</button>` : ''}
+                    <button onclick="likePost('${post.postid}')">Like</button>
+                    ${canDeletePost ? `<button onclick="deletePost('${post.postid}', '${post.userid}')">Delete Post</button>` : ''}
                 </div>
             `;
 
-            console.log('Generated HTML for post', post.postID, postElement.innerHTML);
+            console.log('Generated HTML for post', post.postid, postElement.innerHTML);
 
 
 
@@ -986,31 +996,31 @@ async function loadPost(postsData = null, userID = null, other = false, notifica
 
 
 // SEARCHING POSTS
-async function searchPost(searchTerm = '', categoryID = '', monthID = '', privacyID = '', userID = null, other = false, postID = null) {
+async function searchPost(searchTerm = '', categoryid = '', monthid = '', privacyid = '', userid = null, other = false, postid = null) {
     
-    const currentUser = await getUserID();
+    const currentUser = await getuserid();
     const userRoleResponse = await fetch('/userRole');
     const userRoleData = await userRoleResponse.json();
     const userRole = userRoleData.role;
     
     try {
-        console.log('userID:', userID); // Ensure userID is defined and passed correctly
+        console.log('userid:', userid); // Ensure userid is defined and passed correctly
 
         const queryParams = new URLSearchParams({
             search: encodeURIComponent(searchTerm),
-            categoryID,
-            monthID,
-            postID,
-            privacyID,
+            categoryid,
+            monthid,
+            postid,
+            privacyid,
             userRole
         });
 
-        if (userID) {
-            queryParams.append('userID', userID);
+        if (userid) {
+            queryParams.append('userid', userid);
         }
 
         const requestUrl = `/searchPosts?${queryParams.toString()}&currentUser=${currentUser}`;
-        console.log('Request URL:', requestUrl); // Log full URL to ensure userID is included
+        console.log('Request URL:', requestUrl); // Log full URL to ensure userid is included
 
         const response = await fetch(requestUrl);
 
@@ -1047,12 +1057,12 @@ async function searchUser(searchTerm = '') {
         return; // Exit the function if search term is empty
     }
 
-    const userID = await getUserID();
+    const userid = await getuserid();
 
 
     try {
         // Send a request to the server with the search term
-        const response = await fetch(`/searchUser?term=${encodeURIComponent(searchTerm)}&userID=${userID}`);
+        const response = await fetch(`/searchUser?term=${encodeURIComponent(searchTerm)}&userid=${userid}`);
         if (!response.ok) {
             throw new Error('Failed to fetch search results');
         }
@@ -1089,17 +1099,17 @@ function displaySearchResults(users) {
         const userElement = document.createElement('div');
         userElement.classList.add('user-result');
         userElement.innerHTML = `
-            <p><strong>Name:</strong> ${user.userFullName}</p>
-            <p><strong>School:</strong> ${user.schoolFullName}</p>
+            <p><strong>Name:</strong> ${user.userfullname}</p>
+            <p><strong>School:</strong> ${user.schoolfullname}</p>
             <p><strong>Graduation Year:</strong> ${user.userGraduationYear}</p>
-            <button onclick="showOtherUserInfo('${user.userID}')">View Profile</button>
+            <button onclick="showOtherUserInfo('${user.userid}')">View Profile</button>
         `;
         resultsContainer.appendChild(userElement);
     });
 }
 
 // Separate function to fetch and display latest friends
-async function showLatestFriends(userID, currentUser) {
+async function showLatestFriends(userid, currentUser) {
     const friendContainer = document.getElementById('latest-friends');
     friendContainer.innerHTML = ''; // Clear existing content
 
@@ -1108,7 +1118,7 @@ async function showLatestFriends(userID, currentUser) {
     friendContainer.appendChild(title);
 
     try {
-        const response = await fetch(`/api/friends/latest/${userID}`);
+        const response = await fetch(`/api/friends/latest/${userid}`);
         const data = await response.json();
         console.log("Latest friends data:", data);
 
@@ -1118,13 +1128,13 @@ async function showLatestFriends(userID, currentUser) {
             data.friends.forEach(friend => {
                 const li = document.createElement('li');
                 const friendLink = document.createElement('a');
-                friendLink.textContent = friend.userFullName;
+                friendLink.textContent = friend.userfullname;
                 friendLink.href = '#';
 
-                if (friend.userID === currentUser) {
+                if (friend.userid === currentUser) {
                     friendLink.addEventListener('click', () => showUserInfo());
                 } else {
-                    friendLink.addEventListener('click', () => showOtherUserInfo(friend.userID));
+                    friendLink.addEventListener('click', () => showOtherUserInfo(friend.userid));
                 }
 
                 li.appendChild(friendLink);
@@ -1142,27 +1152,27 @@ async function showLatestFriends(userID, currentUser) {
 }
 
 // VIEWING MY PROFILE
-async function showUserInfo(userID = null) {
+async function showUserInfo(userid = null) {
     hideAllPanels();
     document.getElementById('user-info-panel').style.display = 'block';
 
     try {
-        // Fetch user ID if not provided
-        if (!userID) {
+        // Fetch user id if not provided
+        if (!userid) {
             try {
-                userID = await getUserID(); // Await the result of the async function
-                console.log('Fetched User ID:', userID);
+                userid = await getuserid(); // Await the result of the async function
+                console.log('Fetched User id:', userid);
             } catch (error) {
-                console.error('Error fetching user ID:', error);
-                userID = 'Unknown User'; // Handle error by providing a default or unknown user ID
+                console.error('Error fetching user id:', error);
+                userid = 'Unknown User'; // Handle error by providing a default or unknown user id
             }
         } else {
-            console.log('Provided User ID:', userID);
+            console.log('Provided User id:', userid);
         }
 
-        // Fetch user info for the specified userID
-        console.log(`Fetching user info for userID: ${userID}`);
-        const response = await fetch(`/user-info/${userID}`);
+        // Fetch user info for the specified userid
+        console.log(`Fetching user info for userid: ${userid}`);
+        const response = await fetch(`/user-info/${userid}`);
         const userInfo = await response.json();
 
         if (!userInfo.success) {
@@ -1175,19 +1185,19 @@ async function showUserInfo(userID = null) {
 
         // Display user information
         document.getElementById('user-info').innerHTML = `
-            <p><strong>Full Name:</strong> ${userInfo.userFullName}</p>
-            <p><strong>School:</strong> ${userInfo.schoolFullName}</p>
+            <p><strong>Full Name:</strong> ${userInfo.userfullname}</p>
+            <p><strong>School:</strong> ${userInfo.schoolfullname}</p>
             <p><strong>Graduation Year:</strong> ${userInfo.userGraduationYear}</p>
         `;
 
-        if (userID === userInfo.userID) {
+        if (userid === userInfo.userid) {
             document.getElementById('change-password-btn').style.display = 'block';
             document.getElementById('change-password-btn').onclick = openPasswordModal;
         }
 
         // Load the posts for this user
-        console.log(`Loading posts for userID: ${userInfo.userID}`);
-        const posts = await loadPost(null, userInfo.userID, false);
+        console.log(`Loading posts for userid: ${userInfo.userid}`);
+        const posts = await loadPost(null, userInfo.userid, false);
 
         console.log('Posts loaded:', posts);
 
@@ -1200,13 +1210,13 @@ async function showUserInfo(userID = null) {
 
         // Check if posts were loaded correctly
         if (posts.length === 0) {
-            console.log('No posts found for userID:', userInfo.userID);
+            console.log('No posts found for userid:', userInfo.userid);
             document.getElementById('my-info-container').innerHTML = '<p>No posts available.</p>';
         }
 
         // Fetch user statistics
-        console.log('Fetching user statistics for userID:', userID);
-        await fetchUserStatistics(userID, false);
+        console.log('Fetching user statistics for userid:', userid);
+        await fetchUserStatistics(userid, false);
 
         console.log('ziuuuuuuuuu');
 
@@ -1263,7 +1273,7 @@ async function submitPasswordChange(event) {
         const response = await fetch('/change-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userID: await getUserID(), oldPassword, newPassword })
+            body: JSON.stringify({ userid: await getuserid(), oldPassword, newPassword })
         });
 
         const result = await response.json();
@@ -1289,47 +1299,47 @@ document.getElementById('password-form').addEventListener('submit', submitPasswo
 
 
 // Modified showOtherUserInfo function to use showLatestFriends
-async function showOtherUserInfo(userID = null) {
+async function showOtherUserInfo(userid = null) {
     hideAllPanels();
     document.getElementById('other-user-info-panel').style.display = 'block';
 
-    currentUser = await getUserID();
+    currentUser = await getuserid();
 
-    if (currentUser !== userID) {
+    if (currentUser !== userid) {
         let friendContainer = document.getElementById('friend');
         try {
-            if (!userID) {
-                console.error('No user ID provided');
+            if (!userid) {
+                console.error('No user id provided');
                 return;
             }
 
-            const response = await fetch(`/check-status?userAddresserID=${currentUser}&userAddresseeID=${userID}`);
+            const response = await fetch(`/check-status?userAddresserid=${currentUser}&userAddresseeid=${userid}`);
             const data = await response.json();
             const friendshipStatus = data.status;
-            const userAddresserID = data.userAddresserID;  
-            const userAddresseeID = data.userAddresseeID;  
-            console.log(`User Addressee ID: ${userAddresseeID}`);
+            const userAddresserid = data.userAddresserid;  
+            const userAddresseeid = data.userAddresseeid;  
+            console.log(`User Addressee id: ${userAddresseeid}`);
 
             let acceptButton = null;
 
             console.log("Friendship status:", friendshipStatus);
 
             if (friendshipStatus === 'p') {
-                if (userAddresseeID === currentUser) {
+                if (userAddresseeid === currentUser) {
                     friendContainer.innerHTML = `<p>You received a friend request from this user</p>`;
 
                     acceptButton = document.createElement('button');
                     acceptButton.innerText = 'Accept';
                     acceptButton.addEventListener('click', async () => {
-                        console.log(`Accepting friend request from ${userAddresserID}`); 
-                        respondToFriendRequest('accept', userAddresserID);
+                        console.log(`Accepting friend request from ${userAddresserid}`); 
+                        respondToFriendRequest('accept', userAddresserid);
                     });
 
                     let declineButton = document.createElement('button');
                     declineButton.innerText = 'Decline';
                     declineButton.addEventListener('click', async () => {
-                        console.log(`Declining friend request from ${userAddresserID}`); 
-                        respondToFriendRequest('decline', userAddresserID);
+                        console.log(`Declining friend request from ${userAddresserid}`); 
+                        respondToFriendRequest('decline', userAddresserid);
                     });
 
                     friendContainer.appendChild(acceptButton);
@@ -1340,7 +1350,7 @@ async function showOtherUserInfo(userID = null) {
             } else if (friendshipStatus === 'a') {
                 friendContainer.innerHTML = `<p>You are friends</p>`;
             } else if (friendshipStatus === 'd') {
-                friendContainer.innerHTML = `<button onclick="sendFriendRequest(null, '${userID}')">Add Friend</button>`;
+                friendContainer.innerHTML = `<button onclick="sendFriendRequest(null, '${userid}')">Add Friend</button>`;
             } else {
                 friendContainer.innerHTML = `<p>Error determining friendship status</p>`;
             }
@@ -1351,13 +1361,13 @@ async function showOtherUserInfo(userID = null) {
     }
 
     try {
-        if (!userID) {
-            console.error('No user ID provided');
+        if (!userid) {
+            console.error('No user id provided');
             return;
         }
 
-        console.log(`Fetching user info for userID: ${userID}`);
-        const response = await fetch(`/user-info/${userID}`);
+        console.log(`Fetching user info for userid: ${userid}`);
+        const response = await fetch(`/user-info/${userid}`);
         const userInfo = await response.json();
 
         if (!userInfo.success) {
@@ -1369,15 +1379,15 @@ async function showOtherUserInfo(userID = null) {
         console.log('User Info:', userInfo);
 
         document.getElementById('other-user-info').innerHTML = `
-            <p><strong>Full Name:</strong> ${userInfo.userFullName}</p>
-            <p><strong>School:</strong> ${userInfo.schoolFullName}</p>
+            <p><strong>Full Name:</strong> ${userInfo.userfullname}</p>
+            <p><strong>School:</strong> ${userInfo.schoolfullname}</p>
             <p><strong>Graduation Year:</strong> ${userInfo.userGraduationYear}</p>
         `;
 
-        await showLatestFriends(userID, currentUser);
+        await showLatestFriends(userid, currentUser);
 
-        console.log(`Loading posts for userID: ${userInfo.userID}`);
-        const posts = await loadPost(null, userInfo.userID, true);
+        console.log(`Loading posts for userid: ${userInfo.userid}`);
+        const posts = await loadPost(null, userInfo.userid, true);
 
         if (!Array.isArray(posts)) {
             console.error('Posts data is not an array:', posts);
@@ -1386,16 +1396,16 @@ async function showOtherUserInfo(userID = null) {
         }
 
         if (posts.length === 0) {
-            console.log('No posts found for userID:', userInfo.userID);
+            console.log('No posts found for userid:', userInfo.userid);
             document.getElementById('other-my-info-container').innerHTML = '<p>No posts available.</p>';
         }
 
-        console.log('Fetching user statistics for userID:', userID);
-        await fetchUserStatistics(userID, true);
+        console.log('Fetching user statistics for userid:', userid);
+        await fetchUserStatistics(userid, true);
 
         document.getElementById('other-search-button-my-info').addEventListener('click', async () => {
             try {
-                search(userID, true); 
+                search(userid, true); 
             } catch (error) {
                 console.error('Error during search:', error);
             }
@@ -1403,7 +1413,7 @@ async function showOtherUserInfo(userID = null) {
 
         document.getElementById('other-search-clear-all-my-info').addEventListener('click', () => {
             clearSearchFields(false, true);
-            loadPost(null, userID, true);
+            loadPost(null, userid, true);
         });
 
     } catch (error) {
@@ -1414,24 +1424,24 @@ async function showOtherUserInfo(userID = null) {
 
 
 
-async function respondToFriendRequest(action, userAddresserID) {
+async function respondToFriendRequest(action, userAddresserid) {
     try {
-        const userAddresseeID = await getUserID(); // Get current user's ID
-        console.log(`Responding to friend request: ${action} from ${userAddresserID} to ${userAddresseeID}`); // Added log
+        const userAddresseeid = await getuserid(); // Get current user's id
+        console.log(`Responding to friend request: ${action} from ${userAddresserid} to ${userAddresseeid}`); // Added log
 
         const response = await fetch('/api/friends/respond', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ userAddresserID, userAddresseeID, action }),
+            body: JSON.stringify({ userAddresserid, userAddresseeid, action }),
         });
 
         const result = await response.json();
 
         if (response.ok) {
             showCustomAlert(`Friend request ${action}ed successfully.`);
-            showOtherUserInfo(userAddresserID); // Refresh the user info panel
+            showOtherUserInfo(userAddresserid); // Refresh the user info panel
         } else {
             showCustomAlert(`Failed to ${action} the friend request: ${result.error}`);
         }
@@ -1445,19 +1455,19 @@ async function respondToFriendRequest(action, userAddresserID) {
 
 
 // FETCHING STATISTICS
-async function fetchUserStatistics(userID = null, other = false) {
+async function fetchUserStatistics(userid = null, other = false) {
     try {
-        // Get User ID if not provided
-        if (!userID) {
-            userID = await getUserID();
-            if (!userID) {
-                throw new Error('User ID is null or undefined');
+        // Get User id if not provided
+        if (!userid) {
+            userid = await getuserid();
+            if (!userid) {
+                throw new Error('User id is null or undefined');
             }
-            console.log(`Fetched User ID: ${userID}`);
+            console.log(`Fetched User id: ${userid}`);
         }
 
         // Fetch user statistics from server
-        const response = await fetch(`/user-statistics/${userID}`);
+        const response = await fetch(`/user-statistics/${userid}`);
         if (!response.ok) {
             throw new Error('Failed to fetch user statistics');
         }
@@ -1475,7 +1485,7 @@ async function fetchUserStatistics(userID = null, other = false) {
         const postsByCategoryWithNames = await Promise.all(
             data.postsByCategory.map(async (category) => {
                 try {
-                    const categoryName = await fetchCategoryName(category.postCASCategoryID);
+                    const categoryName = await fetchCategoryName(category.postCASCategoryid);
                     return { ...category, postCASCategory: categoryName };
                 } catch (error) {
                     console.error('Error fetching category name for category:', category, error);
@@ -1506,19 +1516,19 @@ async function fetchUserStatistics(userID = null, other = false) {
 }
 
 // FRIENDS
-async function sendFriendRequest(userAddresserID = null, userAddresseeID = null) {
+async function sendFriendRequest(userAddresserid = null, userAddresseeid = null) {
     try {
-        userAddresserID = await getUserID();
+        userAddresserid = await getuserid();
 
         const friendRequestResponse = await fetch('/api/friends/request', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ userAddresserID, userAddresseeID }),
+            body: JSON.stringify({ userAddresserid, userAddresseeid }),
         });
 
-        console.log("addresser" + userAddresserID);
+        console.log("addresser" + userAddresserid);
 
         if (friendRequestResponse.ok) {
             // Send notification
@@ -1528,15 +1538,15 @@ async function sendFriendRequest(userAddresserID = null, userAddresseeID = null)
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    userID: userAddresseeID,
+                    userid: userAddresseeid,
                     notificationType: 'Friend',
-                    actorID: userAddresserID,
+                    actorid: userAddresserid,
                 }),
             });
 
             if (notificationResponse.ok) {
                 showCustomAlert('Friend request sent and notification created successfully');
-                showOtherUserInfo(userAddresseeID);
+                showOtherUserInfo(userAddresseeid);
             } else {
                 showCustomAlert('Friend request sent but failed to create notification');
             }
@@ -1582,8 +1592,8 @@ function displayUserStatistics(data, other = false) {
 // Function to fetch notifications
 async function fetchNotifications() {
     try {
-        const userID = await getUserID();
-        const response = await fetch(`/api/getNotifications?userID=${userID}`);
+        const userid = await getuserid();
+        const response = await fetch(`/api/getNotifications?userid=${userid}`);
 
         if (response.ok) {
             const notifications = await response.json();
@@ -1611,13 +1621,13 @@ async function fetchNotifications() {
 
                     // Format notification message based on its type
                     if (notification.notificationType === 'Like') {
-                        message = `Your post was liked by ${notification.userFullName}`;
-                        if (notification.postID) {
+                        message = `Your post was liked by ${notification.userfullname}`;
+                        if (notification.postid) {
                             seeMoreButton = document.createElement('button');
                             seeMoreButton.innerText = 'See Post';
                             seeMoreButton.addEventListener('click', async () => {
                                 notificationsContainer.innerHTML = '';
-                                const posts = await searchPost('', '', '', '', null, false, notification.postID);
+                                const posts = await searchPost('', '', '', '', null, false, notification.postid);
                                 notificationPostsContainer.innerHTML = ''; // Clear previous posts
                                 if (Array.isArray(posts) && posts.length > 0) {
                                     console.log('Posts to load:', posts);
@@ -1629,16 +1639,16 @@ async function fetchNotifications() {
                                 }
                             });
                         } else {
-                            console.error('PostID is undefined for Like notification');
+                            console.error('Postid is undefined for Like notification');
                         }
                     } else if (notification.notificationType === 'Comment') {
-                        message = `Your post received a comment from ${notification.userFullName}`;
-                        if (notification.postID) {
+                        message = `Your post received a comment from ${notification.userfullname}`;
+                        if (notification.postid) {
                             seeMoreButton = document.createElement('button');
                             seeMoreButton.innerText = 'See Post';
                             seeMoreButton.addEventListener('click', async () => {
                                 notificationsContainer.innerHTML = '';
-                                const posts = await searchPost('', '', '', '', null, false, notification.postID);
+                                const posts = await searchPost('', '', '', '', null, false, notification.postid);
                                 notificationPostsContainer.innerHTML = ''; // Clear previous posts
                                 if (Array.isArray(posts) && posts.length > 0) {
                                     console.log('Posts to load:', posts);
@@ -1650,14 +1660,14 @@ async function fetchNotifications() {
                                 }
                             });
                         } else {
-                            console.error('PostID is undefined for Comment notification');
+                            console.error('Postid is undefined for Comment notification');
                         }
                     } else if (notification.notificationType === 'Friend') {
-                        message = `You received a friend request from ${notification.userFullName}`;
+                        message = `You received a friend request from ${notification.userfullname}`;
                         seeMoreButton = document.createElement('button');
                         seeMoreButton.innerText = 'See Profile';
                         seeMoreButton.addEventListener('click', () => {
-                            showOtherUserInfo(notification.actorID);
+                            showOtherUserInfo(notification.actorid);
                         });
                     } else {
                         message = `${notification.notificationType}`;
