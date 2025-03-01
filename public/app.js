@@ -927,12 +927,27 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
             const likes = likesArray[index].totallikes;
             const userfullname = await fetchuserfullname(post.userid);
 
-            let userfullnameLink;
-            if (userid === currentUser) {
-                userfullnameLink = `<a href="#" onclick="showUserInfo('${post.userid}')">&#128100; ${userfullname}</a>`;
-            } else {
-                userfullnameLink = `<a href="#" onclick="showOtherUserInfo('${post.userid}')">&#128100; ${userfullname}</a>`;
+            const userContainer = document.createElement('div');
+
+            // Create user link properly as a DOM element
+            const userfullnameLink = document.createElement('a');
+            userfullnameLink.href = '#';
+            userfullnameLink.innerHTML = `&#128100; ${userfullname}`;
+            userfullnameLink.onclick = () => userid === currentUser ? showUserInfo(post.userid) : showOtherUserInfo(post.userid);
+
+            userContainer.appendChild(userfullnameLink);
+
+            // Add Moderator Badge if the user is a moderator
+            if (userRole === 'm') { 
+                const modBadge = document.createElement('span');
+                modBadge.classList.add('moderator-badge');
+                modBadge.textContent = 'Moderator';
+                userContainer.appendChild(modBadge);
             }
+
+            // Append user container before modifying innerHTML
+            postElement.appendChild(userContainer);
+
 
             const canDeletePost = userRole === 'm' || (userRole === 's' && post.userid === userRoleData.userid);
 
@@ -943,54 +958,54 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
             console.log('Media for post', post.postid, media);
 
             postElement.innerHTML = `
-                <div class="post-date">${convertUTCToLocal(post.postdate)}</div>
-                <h3 class="post-card-title">${userfullnameLink}</h3>
+                <div class="post-date">&#128467; ${convertUTCToLocal(post.postdate)}</div>
+                <h3 class="post-card-title"><a href="#" onclick="showOtherUserInfo('${post.userid}')">&#128100; ${userfullname}</a></h3>
                 <div class="post-card-content">${post.posttext}</div>
-                <span class="post-tag">${categoryName}</span>
+                <span class="post-tag">&#127942; ${categoryName}</span>
                 <div class="post-details">
-                    <p>Month: ${monthName} | Privacy: ${privacyLevel}</p>
+                    <p>&#128197; Month: ${monthName} | &#128274; Privacy: ${privacyLevel}</p>
                 </div>
                 <div class="post-media">
                     ${media && media.length > 0 ? `
                         <div class="carousel-container" id="carousel-${post.postid}">
-                        <div class="carousel">
-                            <!-- Loop through media to create carousel items -->
-                            ${media.map((m, index) => `
-                            <div class="carousel-item" style="display: ${index === 0 ? 'block' : 'none'}">
-                                <img src="/uploads/${m.mediaFile}" alt="Media" class="carousel-image"/>
+                            <div class="carousel">
+                                ${media.map((m, index) => `
+                                    <div class="carousel-item" style="display: ${index === 0 ? 'block' : 'none'}">
+                                        <img src="/uploads/${m.mediaFile}" alt="Media" class="carousel-image"/>
+                                    </div>
+                                `).join('')}
                             </div>
-                            `).join('')}
+                            <button class="carousel-arrow left" onclick="changeSlide(-1, 'carousel-${post.postid}')">&#10094;</button>
+                            <button class="carousel-arrow right" onclick="changeSlide(1, 'carousel-${post.postid}')">&#10095;</button>
                         </div>
-                        <button class="carousel-arrow left" onclick="changeSlide(-1, 'carousel-${post.postid}')">&#10094;</button>
-                        <button class="carousel-arrow right" onclick="changeSlide(1, 'carousel-${post.postid}')">&#10095;</button>
-                        </div>
-                    ` : '<p>No media available.</p>'}
+                    ` : '<p>&#127916; No media available.</p>'}
                 </div>
-                <div class="post-likes">Likes: ${likes}</div>
+                <div class="post-likes">&#128077; Likes: ${likes}</div>
                 <div class="post-comments">
                     <div class="comments-list" id="comments-${post.postid}">
                         ${comments.length > 0 ? comments.map(comment => 
                             `<div class="comment">
                                 <div class="comment-author"> &#128100; ${comment.userfullname}</div>
-                                <div class="comment-text">${comment.commenttext}</div>
-                                <div class="comment-date">${convertUTCToLocal(comment.commentdate)}</div>
+                                <div class="comment-text">&#128172; ${comment.commenttext}</div>
+                                <div class="comment-date">&#128467; ${convertUTCToLocal(comment.commentdate)}</div>
                                 ${userRole === 'm' || (userRole === 's' && comment.commentinguserid === userRoleData.userid) ? 
-                                    `<button onclick="deleteComment('${comment.commentid}', '${post.userid}', '${post.postid}')">Delete Comment</button>` : ''}
+                                    `<button onclick="deleteComment('${comment.commentid}', '${post.userid}', '${post.postid}')">&#10060; Delete Comment</button>` : ''}
                             </div>`
-                        ).join('') : '<p>No comments yet.</p>'}
+                        ).join('') : '<p>&#128172; No comments yet.</p>'}
                     </div>
                     <form onsubmit="handleCommentSubmission(event, '${post.postid}', '${post.userid}')">
                         <textarea name="commenttext" placeholder="Write your comment here..." required></textarea>
                         <div class="centered-buttons">
-                            <button id="comment-submit" type="submit">Submit Comment</button>
+                            <button id="comment-submit" type="submit">&#128221; Submit Comment</button>
                         </div>
                     </form>
                 </div>
                 <div class="panel-actions">
-                    <button onclick="likePost('${post.postid}')">Like</button>
-                    ${canDeletePost ? `<button onclick="deletePost('${post.postid}', '${post.userid}')">Delete Post</button>` : ''}
+                    <button onclick="likePost('${post.postid}')">&#128077; Like</button>
+                    ${canDeletePost ? `<button onclick="deletePost('${post.postid}', '${post.userid}')">&#10060; Delete Post</button>` : ''}
                 </div>
             `;
+
 
             console.log('Generated HTML for post', post.postid, postElement.innerHTML);
 
@@ -1678,8 +1693,8 @@ function displayUserStatistics(data, other = false) {
 
 
 
-// Function to fetch notifications
-// Function to fetch notifications
+
+// Function to fetch and display notifications with icons and styling
 async function fetchNotifications() {
     try {
         const userid = await getuserid();
@@ -1687,111 +1702,102 @@ async function fetchNotifications() {
 
         if (response.ok) {
             const notifications = await response.json();
-
             const notificationsContainer = document.getElementById('notifications-container');
             notificationsContainer.innerHTML = '';
 
             const notificationPostsContainer = document.getElementById('notification-post');
-            if (notificationPostsContainer) {
-                notificationPostsContainer.innerHTML = '';
-            } else {
+            if (!notificationPostsContainer) {
                 console.error('Notification posts container element not found');
                 return;
             }
+            notificationPostsContainer.innerHTML = '';
 
             if (Array.isArray(notifications) && notifications.length === 0) {
-                notificationsContainer.innerHTML = '<p>No notifications</p>';
-            } else if (Array.isArray(notifications)) {
-                notifications.forEach(notification => {
-                    const notificationElement = document.createElement('div');
-                    notificationElement.classList.add('notification');
-
-                    let message = '';
-                    let seeMoreButton = null;
-
-                    // Format notification message based on its type
-                    if (notification.notificationtype === 'Like') {
-                        message = `Your post was liked by ${notification.userfullname}`;
-                        if (notification.postid) {
-                            seeMoreButton = document.createElement('button');
-                            seeMoreButton.innerText = 'See Post';
-                            seeMoreButton.addEventListener('click', async () => {
-                                notificationsContainer.innerHTML = '';
-                                const posts = await searchPost('', '', '', '', null, false, notification.postid);
-                                notificationPostsContainer.innerHTML = ''; // Clear previous posts
-                                if (Array.isArray(posts) && posts.length > 0) {
-                                    console.log('Posts to load:', posts);
-                                    await loadPost(posts, null, false, true);
-                                    console.log('Posts loaded successfully.');
-                                } else {
-                                    notificationPostsContainer.innerHTML = '<p>No posts available.</p>';
-                                    console.log('No posts available:', posts);
-                                }
-                            });
-                        } else {
-                            console.error('Postid is undefined for Like notification');
-                        }
-                    } else if (notification.notificationtype === 'Comment') {
-                        message = `Your post received a comment from ${notification.userfullname}`;
-                        if (notification.postid) {
-                            seeMoreButton = document.createElement('button');
-                            seeMoreButton.innerText = 'See Post';
-                            seeMoreButton.addEventListener('click', async () => {
-                                notificationsContainer.innerHTML = '';
-                                const posts = await searchPost('', '', '', '', null, false, notification.postid);
-                                notificationPostsContainer.innerHTML = ''; // Clear previous posts
-                                if (Array.isArray(posts) && posts.length > 0) {
-                                    console.log('Posts to load:', posts);
-                                    await loadPost(posts, null, false, true);
-                                    console.log('Posts loaded successfully.');
-                                } else {
-                                    notificationPostsContainer.innerHTML = '<p>No posts available.</p>';
-                                    console.log('No posts available:', posts);
-                                }
-                            });
-                        } else {
-                            console.error('Postid is undefined for Comment notification');
-                        }
-                    } else if (notification.notificationtype === 'Friend') {
-                        message = `You received a friend request from ${notification.userfullname}`;
-                        seeMoreButton = document.createElement('button');
-                        seeMoreButton.innerText = 'See Profile';
-                        seeMoreButton.addEventListener('click', () => {
-                            showOtherUserInfo(notification.actorid);
-                        });
-                    } else {
-                        message = `${notification.notificationtype}`;
-                    }
-
-                    // Add message in a paragraph element for easier styling
-                    const notificationMessage = document.createElement('p');
-                    notificationMessage.textContent = `${message} at ${convertUTCToLocal(notification.notificationtime)}`;
-                    notificationElement.appendChild(notificationMessage);
-
-                    // Append "See More" button if it exists
-                    if (seeMoreButton) {
-                        notificationElement.appendChild(seeMoreButton);
-                    }
-
-                    notificationsContainer.appendChild(notificationElement);
-
-                    console.log('Original time:', notification.notificationtime);
-                    console.log('Converted time:', convertUTCToLocal(notification.notificationtime));
-                });
-            } else {
-                throw new Error('Invalid notifications data: Not an array');
+                notificationsContainer.innerHTML = '<p class="no-notifications">No notifications</p>';
+                return;
             }
+
+            notifications.forEach(notification => {
+                const notificationElement = document.createElement('div');
+                notificationElement.classList.add('notification-card');
+
+                let icon = ''; 
+                let message = '';
+                let seeMoreButton = null;
+
+                // Format notification message with icons
+                if (notification.notificationtype === 'Like') {
+                    icon = '&#128077;'; // 👍
+                    message = `Your post was liked by ${notification.userfullname}`;
+                    if (notification.postid) {
+                        seeMoreButton = createSeeMoreButton('See Post', async () => {
+                            notificationsContainer.innerHTML = '';
+                            const posts = await searchPost('', '', '', '', null, false, notification.postid);
+                            notificationPostsContainer.innerHTML = '';
+                            if (Array.isArray(posts) && posts.length > 0) {
+                                await loadPost(posts, null, false, true);
+                            } else {
+                                notificationPostsContainer.innerHTML = '<p class="no-posts">No posts available.</p>';
+                            }
+                        });
+                    }
+                } else if (notification.notificationtype === 'Comment') {
+                    icon = '&#128172;'; // 💬
+                    message = `Your post received a comment from ${notification.userfullname}`;
+                    if (notification.postid) {
+                        seeMoreButton = createSeeMoreButton('See Post', async () => {
+                            notificationsContainer.innerHTML = '';
+                            const posts = await searchPost('', '', '', '', null, false, notification.postid);
+                            notificationPostsContainer.innerHTML = '';
+                            if (Array.isArray(posts) && posts.length > 0) {
+                                await loadPost(posts, null, false, true);
+                            } else {
+                                notificationPostsContainer.innerHTML = '<p class="no-posts">No posts available.</p>';
+                            }
+                        });
+                    }
+                } else if (notification.notificationtype === 'Friend') {
+                    icon = '&#128101;'; // 👥
+                    message = `You received a friend request from ${notification.userfullname}`;
+                    seeMoreButton = createSeeMoreButton('See Profile', () => {
+                        showOtherUserInfo(notification.actorid);
+                    });
+                } else {
+                    message = `${notification.notificationtype}`;
+                }
+
+                // Notification time with icon
+                const notificationTime = `<span class="notification-time">&#128467; ${convertUTCToLocal(notification.notificationtime)}</span>`;
+
+                // Message content with icon
+                const notificationMessage = document.createElement('p');
+                notificationMessage.innerHTML = `<span class="notification-icon">${icon}</span> ${message} ${notificationTime}`;
+                
+                // Append message and button
+                notificationElement.appendChild(notificationMessage);
+                if (seeMoreButton) notificationElement.appendChild(seeMoreButton);
+
+                notificationsContainer.appendChild(notificationElement);
+            });
         } else {
             console.error('Failed to fetch notifications');
-            const notificationsContainer = document.getElementById('notifications-container');
-            notificationsContainer.innerHTML = '<p>Error fetching notifications</p>';
+            document.getElementById('notifications-container').innerHTML = '<p class="error-message">Error fetching notifications</p>';
         }
     } catch (error) {
         console.error('Error fetching notifications:', error);
-        const notificationsContainer = document.getElementById('notifications-container');
-        notificationsContainer.innerHTML = '<p>Error fetching notifications</p>';
+        document.getElementById('notifications-container').innerHTML = '<p class="error-message">Error fetching notifications</p>';
     }
 }
+
+// Helper function to create "See More" buttons
+function createSeeMoreButton(text, clickHandler) {
+    const button = document.createElement('button');
+    button.innerText = text;
+    button.classList.add('see-more-btn');
+    button.addEventListener('click', clickHandler);
+    return button;
+}
+
 
 
 

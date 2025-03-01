@@ -172,7 +172,7 @@ select:hover, select:focus {
 
 /* Textarea for Post Creator */
 #post-text {
-    width: 90%;
+    width: 97%;
     padding: 14px;
     margin: 12px 0;
     border: 1px solid #ccc;
@@ -1134,12 +1134,15 @@ select:hover, select:focus {
 .moderator-badge {
     color: white;
     background: red;
-    padding: 5px 10px;
-    border-radius: 5px;
+    padding: 4px 8px;
+    border-radius: 3px;
     font-weight: bold;
+    font-size: 12px;
+    margin-left: 5px;
+    vertical-align: middle;
     display: inline-block;
-    margin-bottom: 10px;
 }
+
 
 /* Friend Request Pending Message */
 .friend-pending {
@@ -1187,4 +1190,66 @@ select:hover, select:focus {
 #posts-by-category li strong, #other-posts-by-category li strong {
     margin-right: 8px;
     color: #1d4d7a;
+}
+
+/* Notification Container */
+#notifications-container {
+    padding: 10px;
+    margin: auto;
+}
+
+/* Individual Notification Card */
+.notification-card {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+    transition: 0.3s ease-in-out;
+}
+
+.notification-card:hover {
+    background: #f1f1f1;
+}
+
+/* Notification Icon */
+.notification-icon {
+    font-size: 20px;
+    margin-right: 8px;
+}
+
+/* Notification Time */
+.notification-time {
+    font-size: 12px;
+    color: #777;
+    margin-left: 10px;
+}
+
+/* See More Button */
+.see-more-btn {
+    background: #1d4d7a;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: 0.2s ease-in-out;
+}
+
+.see-more-btn:hover {
+    background: #1d4d7a;
+}
+
+/* No Notifications Message */
+.no-notifications,
+.no-posts,
+.error-message {
+    text-align: center;
+    font-size: 14px;
+    color: #888;
+    padding: 10px;
 }
