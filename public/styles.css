@@ -8,9 +8,6 @@ body {
     line-height: 1.6;
 }
 
-a{
-    text-decoration: none;
-}
 
 .spinner-overlay {
     position: fixed;
@@ -42,12 +39,13 @@ a{
 
 
 /* Latest Friends Container */
-#latest-friends {
+#latest-friends, #other-latest-friends {
     background: #ffffff;
     border: 1px solid #e0e0e0;
     border-radius: 10px;
     padding: 16px;
     margin-top: 15px;
+    margin-bottom: 15px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
@@ -764,7 +762,7 @@ button:active {
     margin-top: 10px;
 }
 
-textarea[name="commentText"] {
+textarea[name="commenttext"] {
     border: 1px solid #ddd;
     padding: 8px;
     border-radius: 6px;

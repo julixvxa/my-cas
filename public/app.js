@@ -1201,8 +1201,15 @@ function displaySearchResults(users) {
 
 // Separate function to fetch and display latest friends
 async function showLatestFriends(userid, currentUser) {
-    const friendContainer = document.getElementById('latest-friends');
-    friendContainer.innerHTML = ''; // Clear existing content
+    let friendContainer;
+    if (userid == currentUser){
+        console.log(userid, currentUser);
+        friendContainer = document.getElementById('latest-friends');
+        friendContainer.innerHTML = ''; // Clear existing content
+    } else {
+        friendContainer = document.getElementById('other-latest-friends');
+        friendContainer.innerHTML = ''; // Clear existing content
+    }
 
     // Title with styling
     const title = document.createElement('h3');
@@ -1339,6 +1346,8 @@ async function showUserInfo(userid = null) {
         // Fetch user statistics
         console.log('Fetching user statistics for userid:', userid);
         await fetchUserStatistics(userid, false);
+
+        await showLatestFriends(userid, userid);
 
     } catch (error) {
         console.error('Error in showUserInfo function:', error);
