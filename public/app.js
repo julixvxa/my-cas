@@ -374,6 +374,8 @@ async function handleRegistration(event) {
     }
 }
 
+const currentYear = new Date().getFullYear();
+
 
 // SIGN UP
 async function handleSignUp(event) {
@@ -384,13 +386,25 @@ async function handleSignUp(event) {
     const password = document.getElementById('signup-password').value;
     const repeatPassword = document.getElementById('signup-repeat-password').value;
     const school = document.getElementById('signup-school').value;
-    const year = document.getElementById('signup-year').value;
+    const year = document.getElementById('signup-year').value.trim();
     const errorMessage = document.getElementById('errorMessage');
 
     // Validate inputs
     const { isValid, errors, normalizedFullName } = validateInput(email, fullName, password);
 
-    if (!isValid) {
+    console.log(currentYear);
+    
+    // Graduation Year Validation
+    if (!/^\d{4}$/.test(year)) {
+        errors.push('Graduation year must be a four-digit number.');
+    } else {
+        const graduationYear = parseInt(year, 10);
+        if (graduationYear < currentYear - 5 || graduationYear > currentYear + 5) {
+            errors.push(`Graduation year must be between ${currentYear - 5} and ${currentYear + 10}.`);
+        }
+    }
+
+    if (!isValid || errors.length > 0) {
         errorMessage.textContent = errors.join(' ');
         showCustomAlert(errors.join(' '));
         return;
@@ -425,6 +439,7 @@ async function handleSignUp(event) {
         showCustomAlert('An error occurred while processing sign-up. Please try again later.');
     }
 }
+
 
 
 
@@ -1092,22 +1107,26 @@ function displaySearchResults(users) {
     resultsContainer.innerHTML = ''; // Clear previous results
 
     if (users.length === 0) {
-        resultsContainer.innerHTML = '<p>No users found.</p>';
+        resultsContainer.innerHTML = '<p class="no-results">No users found.</p>';
         return;
     }
 
-    // Create and append user elements to the results container
     users.forEach(user => {
         const userElement = document.createElement('div');
-        userElement.classList.add('user-result');
+        userElement.classList.add('user-card');
+
         userElement.innerHTML = `
-            <p><strong>Name:</strong> ${user.userfullname}</p>
-            <p><strong>School:</strong> ${user.schoolfullname}</p>
-            <button onclick="showOtherUserInfo('${user.userid}')">View Profile</button>
+            <div class="user-info">
+                <p class="user-name">&#128100; <strong>${user.userfullname}</strong></p>
+                <p class="user-school">&#127891; ${user.schoolfullname || 'N/A'}</p>
+            </div>
+            <button class="view-profile-btn" onclick="showOtherUserInfo('${user.userid}')">View Profile</button>
         `;
+
         resultsContainer.appendChild(userElement);
     });
 }
+
 
 // Separate function to fetch and display latest friends
 async function showLatestFriends(userid, currentUser) {
