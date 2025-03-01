@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
-
 // EVENT LISTENERS
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -503,7 +502,11 @@ async function handleLogin(event) {
 
 // JavaScript: Logout Function
 async function logout() {
+    const spinner = document.getElementById('loading-spinner');
+
     try {
+        if (spinner) spinner.style.display = 'flex';
+
         const response = await fetch('/logout', { method: 'POST' });
 
         if (!response.ok) {
@@ -516,6 +519,8 @@ async function logout() {
     } catch (error) {
         console.error('Error logging out:', error);
         showCustomAlert('Failed to log out. Please try again later.');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -897,6 +902,10 @@ function changeSlide(direction, carouselId) {
 
 async function loadPost(postsData = null, userid = null, other = false, notification = false) {
     try {
+        // Show the spinner
+        const spinner = document.getElementById('loading-spinner');
+        if (spinner) spinner.style.display = 'flex';
+
         const userRoleResponse = await fetch('/userRole');
         const userRoleData = await userRoleResponse.json();
         const userRole = userRoleData.role;
@@ -943,8 +952,6 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
             const likes = likesArray[index].totallikes;
             const userfullname = await fetchuserfullname(post.userid);
 
-
-
             // Create user info container
             const userContainer = document.createElement('div');
             userContainer.classList.add('user-info');
@@ -955,7 +962,6 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
             userfullnameLink.onclick = () => userid === currentUser ? showUserInfo(post.userid) : showOtherUserInfo(post.userid);
 
             userContainer.appendChild(userfullnameLink);
-
             postElement.appendChild(userContainer);
 
             // === POST DETAILS ===
@@ -1058,13 +1064,21 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
         postsContainer.innerHTML = '';
         postElements.forEach(postElement => postsContainer.appendChild(postElement));
 
+        // Hide spinner after posts load
+        if (spinner) spinner.style.display = 'none';
+
         return posts;
 
     } catch (error) {
         console.error('Error loading posts:', error);
+        if (document.getElementById('loading-spinner')) {
+            document.getElementById('loading-spinner').style.display = 'none';
+        }
         return [];
     }
 }
+
+
 
 
 
@@ -1411,71 +1425,72 @@ async function showOtherUserInfo(userid = null) {
     hideAllPanels();
     document.getElementById('other-user-info-panel').style.display = 'block';
 
-    currentUser = await getuserid();
-
-    if (currentUser !== userid) {
-        let friendContainer = document.getElementById('friend');
-        try {
-            if (!userid) {
-                console.error('No user id provided');
-                return;
-            }
-
-            const response = await fetch(`/check-status?useraddresserid=${currentUser}&useraddresseeid=${userid}`);
-            const data = await response.json();
-            const friendshipStatus = data.status;
-            const useraddresserid = data.useraddresserid;  
-            const useraddresseeid = data.useraddresseeid;  
-            console.log(`User Addressee id: ${useraddresseeid}`);
-
-            let acceptButton = null;
-
-            console.log("Friendship status:", friendshipStatus);
-
-            let friendContainer = document.getElementById('friend');
-            friendContainer.classList.add('friend-container'); // Add the new styling class
-
-
-            if (friendshipStatus === 'p') {
-                if (useraddresseeid === currentUser) {
-                    friendContainer.innerHTML = `<p>You received a friend request from this user</p>`;
-            
-                    acceptButton = document.createElement('button');
-                    acceptButton.innerText = '✔ Accept';
-                    acceptButton.classList.add('accept-btn');
-                    acceptButton.addEventListener('click', async () => {
-                        console.log(`Accepting friend request from ${useraddresserid}`); 
-                        respondToFriendRequest('accept', useraddresserid);
-                    });
-            
-                    let declineButton = document.createElement('button');
-                    declineButton.innerText = '✖ Decline';
-                    declineButton.classList.add('decline-btn');
-                    declineButton.addEventListener('click', async () => {
-                        console.log(`Declining friend request from ${useraddresserid}`); 
-                        respondToFriendRequest('decline', useraddresserid);
-                    });
-            
-                    friendContainer.appendChild(acceptButton);
-                    friendContainer.appendChild(declineButton);
-                } else {
-                    friendContainer.innerHTML = `<p class="friend-pending">Friend request pending ⏳</p>`;
-                }
-            } else if (friendshipStatus === 'a') {
-                friendContainer.innerHTML = `<p>✅ You are friends</p>`;
-            } else if (friendshipStatus === 'd') {
-                friendContainer.innerHTML = `<button onclick="sendFriendRequest(null, '${userid}')">➕ Add Friend</button>`;
-            } else {
-                friendContainer.innerHTML = `<p>❌ Error determining friendship status</p>`;
-            }
-            
-        } catch (error) {
-            console.error('Error in checking friendship status:', error);
-            friendContainer.innerHTML = `<p>Error checking friendship status</p>`;
-        }
-    }
+    const spinner = document.getElementById('loading-spinner');
+    if (spinner) spinner.style.display = 'flex'; // Show spinner
 
     try {
+        currentUser = await getuserid();
+
+        if (currentUser !== userid) {
+            let friendContainer = document.getElementById('friend');
+            try {
+                if (!userid) {
+                    console.error('No user id provided');
+                    return;
+                }
+
+                const response = await fetch(`/check-status?useraddresserid=${currentUser}&useraddresseeid=${userid}`);
+                const data = await response.json();
+                const friendshipStatus = data.status;
+                const useraddresserid = data.useraddresserid;  
+                const useraddresseeid = data.useraddresseeid;  
+                console.log(`User Addressee id: ${useraddresseeid}`);
+
+                let acceptButton = null;
+
+                console.log("Friendship status:", friendshipStatus);
+
+                let friendContainer = document.getElementById('friend');
+                friendContainer.classList.add('friend-container');
+
+                if (friendshipStatus === 'p') {
+                    if (useraddresseeid === currentUser) {
+                        friendContainer.innerHTML = `<p>You received a friend request from this user</p>`;
+
+                        acceptButton = document.createElement('button');
+                        acceptButton.innerText = '✔ Accept';
+                        acceptButton.classList.add('accept-btn');
+                        acceptButton.addEventListener('click', async () => {
+                            console.log(`Accepting friend request from ${useraddresserid}`); 
+                            respondToFriendRequest('accept', useraddresserid);
+                        });
+
+                        let declineButton = document.createElement('button');
+                        declineButton.innerText = '✖ Decline';
+                        declineButton.classList.add('decline-btn');
+                        declineButton.addEventListener('click', async () => {
+                            console.log(`Declining friend request from ${useraddresserid}`); 
+                            respondToFriendRequest('decline', useraddresserid);
+                        });
+
+                        friendContainer.appendChild(acceptButton);
+                        friendContainer.appendChild(declineButton);
+                    } else {
+                        friendContainer.innerHTML = `<p class="friend-pending">Friend request pending ⏳</p>`;
+                    }
+                } else if (friendshipStatus === 'a') {
+                    friendContainer.innerHTML = `<p>✅ You are friends</p>`;
+                } else if (friendshipStatus === 'd') {
+                    friendContainer.innerHTML = `<button onclick="sendFriendRequest(null, '${userid}')">➕ Add Friend</button>`;
+                } else {
+                    friendContainer.innerHTML = `<p>❌ Error determining friendship status</p>`;
+                }
+            } catch (error) {
+                console.error('Error in checking friendship status:', error);
+                friendContainer.innerHTML = `<p>Error checking friendship status</p>`;
+            }
+        }
+
         if (!userid) {
             console.error('No user id provided');
             return;
@@ -1494,27 +1509,21 @@ async function showOtherUserInfo(userid = null) {
         console.log('User Info:', userInfo);
         let userInfoHTML = '';
 
-        // Check if the user is a moderator
         const isModerator = userInfo.userrole === 'm';
-
-        // If the user is a moderator, display the role first
         if (isModerator) {
             userInfoHTML += `<p><strong style="color: red">Moderator</strong></p>`;
         }
 
-        // Construct user info HTML
         userInfoHTML += `
             <p><strong>&#128100; Full Name:</strong> ${userInfo.userfullname}</p>
             <p><strong>&#127979; School:</strong> ${userInfo.schoolfullname || 'N/A'}</p>
         `;
 
-        // If the user is not a moderator, show the graduation year
         if (!isModerator) {
             userInfoHTML += `<p><strong>&#127891; Graduation Year:</strong> ${userInfo.usergraduationyear || 'N/A'}</p>`;
         }
 
         document.getElementById('other-user-info').innerHTML = userInfoHTML;
-
 
         await showLatestFriends(userid, currentUser);
 
@@ -1551,8 +1560,11 @@ async function showOtherUserInfo(userid = null) {
     } catch (error) {
         console.error('Error in showOtherUserInfo function:', error);
         document.getElementById('other-user-info').innerHTML = `<p>Error fetching user info.</p>`;
+    } finally {
+        if (spinner) spinner.style.display = 'none'; // Hide spinner after loading completes
     }
 }
+
 
 
 
@@ -1738,98 +1750,97 @@ function displayUserStatistics(data, other = false) {
 
 // Function to fetch and display notifications with icons and styling
 async function fetchNotifications() {
+    const spinner = document.getElementById('loading-spinner');
+
     try {
+        if (spinner) spinner.style.display = 'flex';
+
         const userid = await getuserid();
         const response = await fetch(`/api/getNotifications?userid=${userid}`);
 
-        if (response.ok) {
-            const notifications = await response.json();
-            const notificationsContainer = document.getElementById('notifications-container');
-            notificationsContainer.innerHTML = '';
-
-            const notificationPostsContainer = document.getElementById('notification-post');
-            if (!notificationPostsContainer) {
-                console.error('Notification posts container element not found');
-                return;
-            }
-            notificationPostsContainer.innerHTML = '';
-
-            if (Array.isArray(notifications) && notifications.length === 0) {
-                notificationsContainer.innerHTML = '<p class="no-notifications">No notifications</p>';
-                return;
-            }
-
-            notifications.forEach(notification => {
-                const notificationElement = document.createElement('div');
-                notificationElement.classList.add('notification-card');
-
-                let icon = ''; 
-                let message = '';
-                let seeMoreButton = null;
-
-                // Format notification message with icons
-                if (notification.notificationtype === 'Like') {
-                    icon = '&#128077;'; // 👍
-                    message = `Your post was liked by ${notification.userfullname}`;
-                    if (notification.postid) {
-                        seeMoreButton = createSeeMoreButton('See Post', async () => {
-                            notificationsContainer.innerHTML = '';
-                            const posts = await searchPost('', '', '', '', null, false, notification.postid);
-                            notificationPostsContainer.innerHTML = '';
-                            if (Array.isArray(posts) && posts.length > 0) {
-                                await loadPost(posts, null, false, true);
-                            } else {
-                                notificationPostsContainer.innerHTML = '<p class="no-posts">No posts available.</p>';
-                            }
-                        });
-                    }
-                } else if (notification.notificationtype === 'Comment') {
-                    icon = '&#128172;'; // 💬
-                    message = `Your post received a comment from ${notification.userfullname}`;
-                    if (notification.postid) {
-                        seeMoreButton = createSeeMoreButton('See Post', async () => {
-                            notificationsContainer.innerHTML = '';
-                            const posts = await searchPost('', '', '', '', null, false, notification.postid);
-                            notificationPostsContainer.innerHTML = '';
-                            if (Array.isArray(posts) && posts.length > 0) {
-                                await loadPost(posts, null, false, true);
-                            } else {
-                                notificationPostsContainer.innerHTML = '<p class="no-posts">No posts available.</p>';
-                            }
-                        });
-                    }
-                } else if (notification.notificationtype === 'Friend') {
-                    icon = '&#128101;'; // 👥
-                    message = `You received a friend request from ${notification.userfullname}`;
-                    seeMoreButton = createSeeMoreButton('See Profile', () => {
-                        showOtherUserInfo(notification.actorid);
-                    });
-                } else {
-                    message = `${notification.notificationtype}`;
-                }
-
-                // Notification time with icon
-                const notificationTime = `<span class="notification-time">&#128467; ${convertUTCToLocal(notification.notificationtime)}</span>`;
-
-                // Message content with icon
-                const notificationMessage = document.createElement('p');
-                notificationMessage.innerHTML = `<span class="notification-icon">${icon}</span> ${message} ${notificationTime}`;
-                
-                // Append message and button
-                notificationElement.appendChild(notificationMessage);
-                if (seeMoreButton) notificationElement.appendChild(seeMoreButton);
-
-                notificationsContainer.appendChild(notificationElement);
-            });
-        } else {
-            console.error('Failed to fetch notifications');
-            document.getElementById('notifications-container').innerHTML = '<p class="error-message">Error fetching notifications</p>';
+        if (!response.ok) {
+            throw new Error('Failed to fetch notifications');
         }
+
+        const notifications = await response.json();
+        const notificationsContainer = document.getElementById('notifications-container');
+        const notificationPostsContainer = document.getElementById('notification-post');
+
+        notificationsContainer.innerHTML = '';
+        if (notificationPostsContainer) notificationPostsContainer.innerHTML = '';
+
+        if (!Array.isArray(notifications) || notifications.length === 0) {
+            notificationsContainer.innerHTML = '<p class="no-notifications">No notifications</p>';
+            return;
+        }
+
+        notifications.forEach(notification => {
+            const notificationElement = document.createElement('div');
+            notificationElement.classList.add('notification-card');
+
+            let icon = ''; 
+            let message = '';
+            let seeMoreButton = null;
+
+            if (notification.notificationtype === 'Like') {
+                icon = '&#128077;'; // 👍
+                message = `Your post was liked by ${notification.userfullname}`;
+                if (notification.postid) {
+                    seeMoreButton = createSeeMoreButton('See Post', async () => {
+                        notificationsContainer.innerHTML = '';
+                        const posts = await searchPost('', '', '', '', null, false, notification.postid);
+                        notificationPostsContainer.innerHTML = '';
+                        if (Array.isArray(posts) && posts.length > 0) {
+                            await loadPost(posts, null, false, true);
+                        } else {
+                            notificationPostsContainer.innerHTML = '<p class="no-posts">No posts available.</p>';
+                        }
+                    });
+                }
+            } else if (notification.notificationtype === 'Comment') {
+                icon = '&#128172;'; // 💬
+                message = `Your post received a comment from ${notification.userfullname}`;
+                if (notification.postid) {
+                    seeMoreButton = createSeeMoreButton('See Post', async () => {
+                        notificationsContainer.innerHTML = '';
+                        const posts = await searchPost('', '', '', '', null, false, notification.postid);
+                        notificationPostsContainer.innerHTML = '';
+                        if (Array.isArray(posts) && posts.length > 0) {
+                            await loadPost(posts, null, false, true);
+                        } else {
+                            notificationPostsContainer.innerHTML = '<p class="no-posts">No posts available.</p>';
+                        }
+                    });
+                }
+            } else if (notification.notificationtype === 'Friend') {
+                icon = '&#128101;'; // 👥
+                message = `You received a friend request from ${notification.userfullname}`;
+                seeMoreButton = createSeeMoreButton('See Profile', () => {
+                    showOtherUserInfo(notification.actorid);
+                });
+            } else {
+                message = `${notification.notificationtype}`;
+            }
+
+            const notificationTime = `<span class="notification-time">&#128467; ${convertUTCToLocal(notification.notificationtime)}</span>`;
+
+            const notificationMessage = document.createElement('p');
+            notificationMessage.innerHTML = `<span class="notification-icon">${icon}</span> ${message} ${notificationTime}`;
+
+            notificationElement.appendChild(notificationMessage);
+            if (seeMoreButton) notificationElement.appendChild(seeMoreButton);
+
+            notificationsContainer.appendChild(notificationElement);
+        });
+
     } catch (error) {
         console.error('Error fetching notifications:', error);
         document.getElementById('notifications-container').innerHTML = '<p class="error-message">Error fetching notifications</p>';
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
+
 
 // Helper function to create "See More" buttons
 function createSeeMoreButton(text, clickHandler) {
