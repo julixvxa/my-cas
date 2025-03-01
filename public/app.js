@@ -257,7 +257,7 @@ function displayPopupMessage(message, type = 'success') {
 
 
 
-  function validateInput(email = null, fullName = null, password = null) {
+function validateInput(email = null, fullName = null, password = null) {
     const errors = [];
 
     // Validate email only if provided
@@ -335,26 +335,40 @@ document.querySelectorAll('.show-password').forEach(checkbox => {
 async function handleRegistration(event) {
     event.preventDefault();
 
-    const schoolfullname = document.getElementById('register-school').value;
-    const email = document.getElementById('register-email').value;
-    const userfullname = document.getElementById('register-fullname').value;
+    const schoolfullname = document.getElementById('register-school').value.trim();
+    const email = document.getElementById('register-email').value.trim();
+    const userfullname = document.getElementById('register-fullname').value.trim();
     const password = document.getElementById('register-password').value;
     const repeatPassword = document.getElementById('register-repeat-password').value;
     const errorMessage = document.getElementById('errorMessage');
 
+    // **Call validateInput()**
+    const { isValid, errors, normalizedFullName } = validateInput(email, userfullname, password);
+
+
+    // **Check password match**
     if (password !== repeatPassword) {
-        errorMessage.textContent = 'Passwords do not match!';
-        showCustomAlert('Passwords do not match. Please ensure both passwords match.');
-        document.getElementById('register-password').value = '';
-        document.getElementById('register-repeat-password').value = '';
+        errors.push('Passwords do not match.');
+    }
+
+    // **Handle Errors**
+    if (!isValid || errors.length > 0) {
+        errorMessage.textContent = errors.join(' ');
+        showCustomAlert(errors.join(' '));
         return;
     }
 
+    // **Register user if validation passes**
     try {
         const response = await fetch('/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ schoolfullname, email, userfullname, password })
+            body: JSON.stringify({
+                schoolfullname,
+                email,
+                userfullname: normalizedFullName,  // Use Title Case full name
+                password
+            })
         });
 
         if (!response.ok) {
@@ -373,6 +387,8 @@ async function handleRegistration(event) {
         showCustomAlert('An error occurred while processing registration. Please try again later.');
     }
 }
+
+
 
 const currentYear = new Date().getFullYear();
 
@@ -927,9 +943,12 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
             const likes = likesArray[index].totallikes;
             const userfullname = await fetchuserfullname(post.userid);
 
-            const userContainer = document.createElement('div');
 
-            // Create user link properly as a DOM element
+
+            // Create user info container
+            const userContainer = document.createElement('div');
+            userContainer.classList.add('user-info');
+
             const userfullnameLink = document.createElement('a');
             userfullnameLink.href = '#';
             userfullnameLink.innerHTML = `&#128100; ${userfullname}`;
@@ -937,79 +956,101 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
 
             userContainer.appendChild(userfullnameLink);
 
-            // Add Moderator Badge if the user is a moderator
-            if (userRole === 'm') { 
-                const modBadge = document.createElement('span');
-                modBadge.classList.add('moderator-badge');
-                modBadge.textContent = 'Moderator';
-                userContainer.appendChild(modBadge);
-            }
-
-            // Append user container before modifying innerHTML
             postElement.appendChild(userContainer);
 
-
-            const canDeletePost = userRole === 'm' || (userRole === 's' && post.userid === userRoleData.userid);
-
-            const categoryName = await fetchCategoryName(post.postcascategoryid);
-            const monthName = await fetchMonthName(post.postmonthid);
-            const privacyLevel = await fetchPrivacyLevel(post.postprivacyid);
-
-            console.log('Media for post', post.postid, media);
-
-            postElement.innerHTML = `
+            // === POST DETAILS ===
+            const postDetails = document.createElement('div');
+            postDetails.innerHTML = `
                 <div class="post-date">&#128467; ${convertUTCToLocal(post.postdate)}</div>
-                <h3 class="post-card-title"><a href="#" onclick="showOtherUserInfo('${post.userid}')">&#128100; ${userfullname}</a></h3>
+                <h3 class="post-card-title"></h3>  <!-- Empty h3 for styling -->
                 <div class="post-card-content">${post.posttext}</div>
-                <span class="post-tag">&#127942; ${categoryName}</span>
+                <span class="post-tag">&#127942; ${await fetchCategoryName(post.postcascategoryid)}</span>
                 <div class="post-details">
-                    <p>&#128197; Month: ${monthName} | &#128274; Privacy: ${privacyLevel}</p>
-                </div>
-                <div class="post-media">
-                    ${media && media.length > 0 ? `
-                        <div class="carousel-container" id="carousel-${post.postid}">
-                            <div class="carousel">
-                                ${media.map((m, index) => `
-                                    <div class="carousel-item" style="display: ${index === 0 ? 'block' : 'none'}">
-                                        <img src="/uploads/${m.mediaFile}" alt="Media" class="carousel-image"/>
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <button class="carousel-arrow left" onclick="changeSlide(-1, 'carousel-${post.postid}')">&#10094;</button>
-                            <button class="carousel-arrow right" onclick="changeSlide(1, 'carousel-${post.postid}')">&#10095;</button>
-                        </div>
-                    ` : '<p>&#127916; No media available.</p>'}
-                </div>
-                <div class="post-likes">&#128077; Likes: ${likes}</div>
-                <div class="post-comments">
-                    <div class="comments-list" id="comments-${post.postid}">
-                        ${comments.length > 0 ? comments.map(comment => 
-                            `<div class="comment">
-                                <div class="comment-author"> &#128100; ${comment.userfullname}</div>
-                                <div class="comment-text">&#128172; ${comment.commenttext}</div>
-                                <div class="comment-date">&#128467; ${convertUTCToLocal(comment.commentdate)}</div>
-                                ${userRole === 'm' || (userRole === 's' && comment.commentinguserid === userRoleData.userid) ? 
-                                    `<button onclick="deleteComment('${comment.commentid}', '${post.userid}', '${post.postid}')">&#10060; Delete Comment</button>` : ''}
-                            </div>`
-                        ).join('') : '<p>&#128172; No comments yet.</p>'}
-                    </div>
-                    <form onsubmit="handleCommentSubmission(event, '${post.postid}', '${post.userid}')">
-                        <textarea name="commenttext" placeholder="Write your comment here..." required></textarea>
-                        <div class="centered-buttons">
-                            <button id="comment-submit" type="submit">&#128221; Submit Comment</button>
-                        </div>
-                    </form>
-                </div>
-                <div class="panel-actions">
-                    <button onclick="likePost('${post.postid}')">&#128077; Like</button>
-                    ${canDeletePost ? `<button onclick="deletePost('${post.postid}', '${post.userid}')">&#10060; Delete Post</button>` : ''}
+                    <p>&#128197; Month: ${await fetchMonthName(post.postmonthid)} | &#128274; Privacy: ${await fetchPrivacyLevel(post.postprivacyid)}</p>
                 </div>
             `;
 
+            postElement.appendChild(postDetails);
+
+            // === MEDIA SECTION ===
+            if (media && media.length > 0) {
+                const mediaContainer = document.createElement('div');
+                mediaContainer.classList.add('post-media');
+                mediaContainer.innerHTML = `
+                    <div class="carousel-container" id="carousel-${post.postid}">
+                        <div class="carousel">
+                            ${media.map((m, index) => `
+                                <div class="carousel-item" style="display: ${index === 0 ? 'block' : 'none'}">
+                                    <img src="/uploads/${m.mediaFile}" alt="Media" class="carousel-image"/>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="carousel-arrow left" onclick="changeSlide(-1, 'carousel-${post.postid}')">&#10094;</button>
+                        <button class="carousel-arrow right" onclick="changeSlide(1, 'carousel-${post.postid}')">&#10095;</button>
+                    </div>
+                `;
+                postElement.appendChild(mediaContainer);
+            }
+
+            // === LIKES SECTION ===
+            const likesContainer = document.createElement('div');
+            likesContainer.classList.add('post-likes');
+            likesContainer.innerHTML = `&#128077; Likes: ${likes}`;
+            postElement.appendChild(likesContainer);
+
+            // === COMMENTS SECTION ===
+            const commentsContainer = document.createElement('div');
+            commentsContainer.classList.add('post-comments');
+
+            const commentsList = document.createElement('div');
+            commentsList.classList.add('comments-list');
+            commentsList.id = `comments-${post.postid}`;
+            commentsList.innerHTML = comments.length > 0
+                ? comments.map(comment => `
+                    <div class="comment">
+                        <div class="comment-author"> &#128100; ${comment.userfullname}</div>
+                        <div class="comment-text">&#128172; ${comment.commenttext}</div>
+                        <div class="comment-date">&#128467; ${convertUTCToLocal(comment.commentdate)}</div>
+                        ${userRole === 'm' || (userRole === 's' && comment.commentinguserid === userRoleData.userid) ? 
+                            `<button onclick="deleteComment('${comment.commentid}', '${post.userid}', '${post.postid}')">&#10060; Delete Comment</button>` : ''}
+                    </div>
+                `).join('') 
+                : '<p>&#128172; No comments yet.</p>';
+
+            commentsContainer.appendChild(commentsList);
+
+            // Comment form
+            const commentForm = document.createElement('form');
+            commentForm.onsubmit = (event) => handleCommentSubmission(event, post.postid, post.userid);
+            commentForm.innerHTML = `
+                <textarea name="commenttext" placeholder="Write your comment here..." required></textarea>
+                <div class="centered-buttons">
+                    <button id="comment-submit" type="submit">&#128221; Submit Comment</button>
+                </div>
+            `;
+
+            commentsContainer.appendChild(commentForm);
+            postElement.appendChild(commentsContainer);
+
+            // === ACTION BUTTONS ===
+            const panelActions = document.createElement('div');
+            panelActions.classList.add('panel-actions');
+
+            const likeButton = document.createElement('button');
+            likeButton.innerHTML = '&#128077; Like';
+            likeButton.onclick = () => likePost(post.postid);
+            panelActions.appendChild(likeButton);
+
+            if (userRole === 'm' || (userRole === 's' && post.userid === userRoleData.userid)) {
+                const deleteButton = document.createElement('button');
+                deleteButton.innerHTML = '&#10060; Delete Post';
+                deleteButton.onclick = () => deletePost(post.postid, post.userid);
+                panelActions.appendChild(deleteButton);
+            }
+
+            postElement.appendChild(panelActions);
 
             console.log('Generated HTML for post', post.postid, postElement.innerHTML);
-
-
 
             return postElement;
         }));
@@ -1024,6 +1065,7 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
         return [];
     }
 }
+
 
 
 
