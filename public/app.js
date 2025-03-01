@@ -964,7 +964,7 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
                 <div class="post-date">&#128467; ${convertUTCToLocal(post.postdate)}</div>
                 <h3 class="post-card-title"></h3>  <!-- Empty h3 for styling -->
                 <div class="post-card-content">${post.posttext}</div>
-                <span class="post-tag">&#127942; ${await fetchCategoryName(post.postcascategoryid)}</span>
+                <span class="post-tag"> &#127942; ${await fetchCategoryName(post.postcascategoryid)}</span>
                 <div class="post-details">
                     <p>&#128197; Month: ${await fetchMonthName(post.postmonthid)} | &#128274; Privacy: ${await fetchPrivacyLevel(post.postprivacyid)}</p>
                 </div>
