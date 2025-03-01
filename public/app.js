@@ -205,11 +205,76 @@ function convertUTCToLocal(dateString) {
 
 // Function to show the custom alert modal
 function showCustomAlert(message) {
-    const modal = document.getElementById('customAlert');
-    const alertMessage = document.getElementById('alertMessage');
-    alertMessage.innerText = message; // Set the message dynamically
-    modal.style.display = 'flex'; // Show the modal
-  }
+    return new Promise((resolve) => {
+        const modal = document.getElementById('customAlert');
+        const alertMessage = document.getElementById('alertMessage');
+        const confirmBtn = document.getElementById('confirmAlert');
+        const cancelBtn = document.getElementById('cancelAlert');
+        const closeBtn = document.getElementById('closeAlert');
+
+        // Ensure elements exist
+        if (!modal || !alertMessage || !confirmBtn || !cancelBtn || !closeBtn) {
+            console.error('Custom alert modal elements not found!');
+            resolve(false);
+            return;
+        }
+
+        // Show alert message
+        alertMessage.innerText = message;
+        modal.style.display = 'flex';
+
+        // Hide confirmation buttons & show close button (for simple alerts)
+        confirmBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+        closeBtn.style.display = 'block';
+
+        closeBtn.onclick = () => {
+            modal.style.display = 'none';
+            resolve(true);
+        };
+    });
+}
+
+function showCustomConfirm(message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('customAlert');
+        const alertMessage = document.getElementById('alertMessage');
+        const confirmBtn = document.getElementById('confirmAlert');
+        const cancelBtn = document.getElementById('cancelAlert');
+        const closeBtn = document.getElementById('closeAlert');
+
+        // Ensure elements exist
+        if (!modal || !alertMessage || !confirmBtn || !cancelBtn || !closeBtn) {
+            console.error('Custom alert modal elements not found!');
+            resolve(false);
+            return;
+        }
+
+        // Show confirmation message
+        alertMessage.innerText = message;
+        modal.style.display = 'flex';
+
+        // Show confirmation buttons & hide close button
+        confirmBtn.style.display = 'block';
+        cancelBtn.style.display = 'block';
+        closeBtn.style.display = 'none';
+
+        // Remove previous click handlers
+        confirmBtn.onclick = null;
+        cancelBtn.onclick = null;
+
+        confirmBtn.onclick = () => {
+            modal.style.display = 'none';
+            resolve(true);
+        };
+
+        cancelBtn.onclick = () => {
+            modal.style.display = 'none';
+            resolve(false);
+        };
+    });
+}
+
   
   // Function to close the custom alert modal
   function closeCustomAlert() {
@@ -341,41 +406,41 @@ async function handleRegistration(event) {
     const repeatPassword = document.getElementById('register-repeat-password').value;
     const errorMessage = document.getElementById('errorMessage');
 
-    // **Call validateInput()**
+    // **Validate input**
     const { isValid, errors, normalizedFullName } = validateInput(email, userfullname, password);
 
-
-    // **Check password match**
     if (password !== repeatPassword) {
         errors.push('Passwords do not match.');
     }
 
-    // **Handle Errors**
     if (!isValid || errors.length > 0) {
-        errorMessage.textContent = errors.join(' ');
         showCustomAlert(errors.join(' '));
         return;
     }
 
-    // **Register user if validation passes**
+    const spinner = document.getElementById('loading-spinner');
+
     try {
+        if (spinner) spinner.style.display = 'flex';
+
         const response = await fetch('/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 schoolfullname,
                 email,
-                userfullname: normalizedFullName,  // Use Title Case full name
+                userfullname: normalizedFullName,
                 password
             })
         });
 
-        if (!response.ok) {
-            throw new Error('Network response not ok');
-        }
-
         const result = await response.json();
-        if (result.success) {
+
+        if (response.status === 409) {
+            // **Handle existing user or school**
+            showCustomAlert(result.message || 'A user or school with this information already exists.');
+            showSignUp();
+        } else if (response.ok) {
             displayPopupMessage('Registered successfully');
             showLogin();
         } else {
@@ -384,8 +449,12 @@ async function handleRegistration(event) {
     } catch (error) {
         console.error('Error during registration:', error);
         showCustomAlert('An error occurred while processing registration. Please try again later.');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
+
+
 
 
 
@@ -396,54 +465,57 @@ const currentYear = new Date().getFullYear();
 async function handleSignUp(event) {
     event.preventDefault();
 
-    const email = document.getElementById('signup-email').value;
-    const fullName = document.getElementById('signup-fullname').value;
+    const email = document.getElementById('signup-email').value.trim();
+    const fullName = document.getElementById('signup-fullname').value.trim();
     const password = document.getElementById('signup-password').value;
     const repeatPassword = document.getElementById('signup-repeat-password').value;
-    const school = document.getElementById('signup-school').value;
+    const school = document.getElementById('signup-school').value.trim();
     const year = document.getElementById('signup-year').value.trim();
     const errorMessage = document.getElementById('errorMessage');
 
-    // Validate inputs
     const { isValid, errors, normalizedFullName } = validateInput(email, fullName, password);
 
-    console.log(currentYear);
-    
-    // Graduation Year Validation
+    const spinner = document.getElementById('loading-spinner');
+
+    // **Graduation Year Validation**
     if (!/^\d{4}$/.test(year)) {
         errors.push('Graduation year must be a four-digit number.');
     } else {
         const graduationYear = parseInt(year, 10);
         if (graduationYear < currentYear - 5 || graduationYear > currentYear + 5) {
-            errors.push(`Graduation year must be between ${currentYear - 5} and ${currentYear + 10}.`);
+            errors.push(`Graduation year must be between ${currentYear - 5} and ${currentYear + 5}.`);
         }
     }
 
     if (!isValid || errors.length > 0) {
-        errorMessage.textContent = errors.join(' ');
         showCustomAlert(errors.join(' '));
         return;
     }
 
     if (password !== repeatPassword) {
-        errorMessage.textContent = 'Passwords do not match!';
         showCustomAlert('Passwords do not match. Please ensure both passwords match.');
         return;
     }
 
     try {
+        if (spinner) spinner.style.display = 'flex';
+
         const response = await fetch('/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, fullName: normalizedFullName, password, school, year })
         });
 
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-
         const result = await response.json();
-        if (result.success) {
+
+        if (response.status === 409) {
+            // **Handle existing user case**
+            showCustomAlert('An account with this email already exists. Please log in instead.');
+            showLogin();
+        } else if (response.status === 400) {
+            // **Handle non-existent school case**
+            showCustomAlert('The specified school does not exist. Please contact your CAS Coordinator.');
+        } else if (response.ok) {
             displayPopupMessage('Signed up successfully');
             showLogin();
         } else {
@@ -452,8 +524,12 @@ async function handleSignUp(event) {
     } catch (error) {
         console.error('Error during sign-up:', error);
         showCustomAlert('An error occurred while processing sign-up. Please try again later.');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
+
+
 
 
 
@@ -461,11 +537,15 @@ async function handleSignUp(event) {
 // LOGIN
 async function handleLogin(event) {
     event.preventDefault();
+    const spinner = document.getElementById('loading-spinner');
+
 
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
 
     try {
+        if (spinner) spinner.style.display = 'flex';
+
         const response = await fetch('/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -485,6 +565,7 @@ async function handleLogin(event) {
         } else if (response.status === 404) {
             // User not found
             showCustomAlert('No account found with this email. Please register.');
+            showRegister();
         } else {
             // Handle other server errors
             console.error('Unexpected server response', result);
@@ -493,6 +574,8 @@ async function handleLogin(event) {
     } catch (error) {
         console.error('Error logging in:', error);
         showCustomAlert('An error occurred during login. Please try again later.');
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -601,7 +684,10 @@ async function handlePostCreation(event) {
         formData.append('media', file);
     }
 
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
+
         const response = await fetch('/post', {
             method: 'POST',
             body: formData
@@ -633,6 +719,8 @@ async function handlePostCreation(event) {
     } catch (error) {
         console.error('Error creating post:', error);
         showCustomAlert(`An error occurred while creating the post: ${error.message}`);
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -642,17 +730,22 @@ async function handleCommentSubmission(event, postid, postsowneruserid) {
     const view = getCurrentView();
 
     let userid;
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         userid = await getuserid(); // Await the result of the async function
     } catch (error) {
         console.error('Error fetching user id:', error);
         userid = 'Unknown User'; // Handle error by providing a default or unknown user id
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 
     const form = event.target;
     const commenttext = form.commenttext.value;
 
     try {
+        if (spinner) spinner.style.display = 'flex';
         const response = await fetch('/add-comments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -700,11 +793,15 @@ async function handleCommentSubmission(event, postid, postsowneruserid) {
         }
     } catch (error) {
         console.error('Error submitting comment:', error);
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
 async function getPostOwnerid(postid) {
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         const response = await fetch(`/api/getPostOwnerid?postid=${postid}`);
         if (response.ok) {
             const data = await response.json();
@@ -716,6 +813,8 @@ async function getPostOwnerid(postid) {
     } catch (error) {
         console.error('Error fetching post owner id:', error);
         return null;
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -725,16 +824,21 @@ async function likePost(postid) {
     const view = getCurrentView();
 
     let userid;
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         userid = await getuserid(); // Await the result of the async function
     } catch (error) {
         console.error('Error fetching user id:', error);
         userid = 'Unknown User'; // Handle error by providing a default or unknown user id
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 
     const postownerid = await getPostOwnerid(postid);
 
     try {
+        if (spinner) spinner.style.display = 'flex';
         const response = await fetch('/like', {
             method: 'POST',
             headers: {
@@ -783,94 +887,104 @@ async function likePost(postid) {
         }
     } catch (error) {
         console.error('Error liking the post:', error);
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
 
-// DELETING POSTS
-async function deletePost(postid, postsowneruserid=null) {
+async function deletePost(postid, postsowneruserid = null) {
+    if (!(await showCustomConfirm('Are you sure you want to delete this post?'))) return;
+
     const view = getCurrentView();
     console.log(postsowneruserid);
 
-
     let userid;
+    const spinner = document.getElementById('loading-spinner');
+
     try {
+        if (spinner) spinner.style.display = 'flex';
         userid = await getuserid();
     } catch (error) {
         console.error('Error fetching user id:', error);
         userid = 'Unknown User';
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 
-    if (!confirm('Are you sure you want to delete this post?')) return;
-
     try {
-        const response = await fetch(`/posts/${postid}`, {
-            method: 'DELETE'
-        });
+        if (spinner) spinner.style.display = 'flex';
 
+        const response = await fetch(`/posts/${postid}`, { method: 'DELETE' });
         const result = await response.json();
+
         if (result.success) {
-            // Reload or update posts based on the current view
+            displayPopupMessage('Post deleted successfully!', 'success'); 
+
             if (view === 'user-info') {
-                console.log('Reloading posts for user-info view');
-                loadPost(null, userid, false); // Reload posts for the user's profile
-            } else if (view === 'other-user-info'){
-                loadPost(null, postsowneruserid, true)
+                loadPost(null, userid, false);
+            } else if (view === 'other-user-info') {
+                loadPost(null, postsowneruserid, true);
             } else if (view === 'feed') {
-                console.log('Reloading posts for feed view');
-                loadPost(); // Reload posts for the feed view
-            } else if (view === 'notifications'){
+                loadPost();
+            } else if (view === 'notifications') {
                 loadPost(await searchPost('', '', '', '', null, false, postid), null, false, true);
             }
         } else {
-            console.error('Failed to delete the post:', result.message);
+            displayPopupMessage('Failed to delete the post: ' + result.message, 'error');
         }
     } catch (error) {
-        console.error('Error deleting the post:', error);
+        displayPopupMessage('Error deleting the post!', 'error');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
-
-// DELETING COMMENTS
 async function deleteComment(commentid, postsOwneruserid, postid) {
-    const view = getCurrentView();
+    if (!(await showCustomConfirm('Are you sure you want to delete this comment?'))) return;
 
+    const view = getCurrentView();
     let userid;
+    const spinner = document.getElementById('loading-spinner');
+
     try {
+        if (spinner) spinner.style.display = 'flex';
         userid = await getuserid();
     } catch (error) {
         console.error('Error fetching user id:', error);
         userid = 'Unknown User';
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 
-    if (!confirm('Are you sure you want to delete this comment?')) return;
-
     try {
-        const response = await fetch(`/comments/${commentid}`, {
-            method: 'DELETE'
-        });
-
+        if (spinner) spinner.style.display = 'flex';
+        const response = await fetch(`/comments/${commentid}`, { method: 'DELETE' });
         const result = await response.json();
+
         if (result.success) {
-            // Reload or update posts based on the current view
+            displayPopupMessage('Comment deleted successfully!', 'success');
+
             if (view === 'user-info') {
-                console.log('Reloading posts for user-info view');
-                loadPost(null, userid, false); // Reload posts for the user's profile
-            } else if (view === 'other-user-info'){
-                loadPost(null, postsOwneruserid, true)
+                loadPost(null, userid, false);
+            } else if (view === 'other-user-info') {
+                loadPost(null, postsOwneruserid, true);
             } else if (view === 'feed') {
-                console.log('Reloading posts for feed view');
-                loadPost(); // Reload posts for the feed view
-            } else if (view === 'notifications'){
+                loadPost();
+            } else if (view === 'notifications') {
                 loadPost(await searchPost('', '', '', '', null, false, postid), null, false, true);
             }
         } else {
-            console.error('Failed to delete the comment:', result.message);
+            displayPopupMessage('Failed to delete the comment: ' + result.message, 'error');
         }
     } catch (error) {
-        console.error('Error deleting the comment:', error);
+        displayPopupMessage('Error deleting the comment!', 'error');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
+
+
 
 let currentSlideIndex = {}; // Track current slide for each carousel
 
@@ -901,9 +1015,10 @@ function changeSlide(direction, carouselId) {
 
 
 async function loadPost(postsData = null, userid = null, other = false, notification = false) {
+    const spinner = document.getElementById('loading-spinner');
+
     try {
         // Show the spinner
-        const spinner = document.getElementById('loading-spinner');
         if (spinner) spinner.style.display = 'flex';
 
         const userRoleResponse = await fetch('/userRole');
@@ -1075,6 +1190,8 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
             document.getElementById('loading-spinner').style.display = 'none';
         }
         return [];
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -1091,7 +1208,9 @@ async function searchPost(searchTerm = '', categoryid = '', monthid = '', privac
     const userRoleData = await userRoleResponse.json();
     const userRole = userRoleData.role;
     
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         console.log('userid:', userid); // Ensure userid is defined and passed correctly
 
         const queryParams = new URLSearchParams({
@@ -1130,6 +1249,8 @@ async function searchPost(searchTerm = '', categoryid = '', monthid = '', privac
     } catch (error) {
         console.error('Error searching posts:', error);
         return [];
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -1148,7 +1269,9 @@ async function searchUser(searchTerm = '') {
     const userid = await getuserid();
 
 
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         // Send a request to the server with the search term
         const response = await fetch(`/searchUser?term=${encodeURIComponent(searchTerm)}&userid=${userid}`);
         if (!response.ok) {
@@ -1169,6 +1292,8 @@ async function searchUser(searchTerm = '') {
     } catch (error) {
         console.error('Error searching for user:', error);
         document.getElementById('search-results').innerHTML = '<p>Error searching for users.</p>';
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -1217,7 +1342,9 @@ async function showLatestFriends(userid, currentUser) {
     title.classList.add('latest-friends-title');
     friendContainer.appendChild(title);
 
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         const response = await fetch(`/api/friends/latest/${userid}`);
         const data = await response.json();
         console.log("Latest friends data:", data);
@@ -1252,6 +1379,8 @@ async function showLatestFriends(userid, currentUser) {
     } catch (error) {
         console.error('Error fetching latest friends:', error);
         friendContainer.innerHTML = '<p class="error-message">Error loading friends.</p>';
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -1261,7 +1390,9 @@ async function showUserInfo(userid = null) {
     hideAllPanels();
     document.getElementById('user-info-panel').style.display = 'block';
 
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         // Fetch user id if not provided
         if (!userid) {
             try {
@@ -1352,6 +1483,8 @@ async function showUserInfo(userid = null) {
     } catch (error) {
         console.error('Error in showUserInfo function:', error);
         document.getElementById('user-info').innerHTML = `<p>Error fetching user info.</p>`;
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -1400,7 +1533,9 @@ async function submitPasswordChange(event) {
         return;
     }
 
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         const response = await fetch('/change-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1417,6 +1552,8 @@ async function submitPasswordChange(event) {
         }
     } catch (error) {
         displayPopupMessage('An error occurred. Please try again.', 'error');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -1578,7 +1715,9 @@ async function showOtherUserInfo(userid = null) {
 
 
 async function respondToFriendRequest(action, useraddresserid) {
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         const useraddresseeid = await getuserid(); // Get current user's id
         console.log(`Responding to friend request: ${action} from ${useraddresserid} to ${useraddresseeid}`); // Added log
 
@@ -1601,6 +1740,8 @@ async function respondToFriendRequest(action, useraddresserid) {
     } catch (error) {
         console.error(`Error trying to ${action} friend request:`, error);
         showCustomAlert('An error occurred while responding to the friend request');
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
@@ -1609,7 +1750,9 @@ async function respondToFriendRequest(action, useraddresserid) {
 
 // FETCHING STATISTICS
 async function fetchUserStatistics(userid = null, other = false) {
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         // Get User id if not provided
         if (!userid) {
             userid = await getuserid();
@@ -1670,12 +1813,16 @@ async function fetchUserStatistics(userid = null, other = false) {
             document.getElementById('other-total-posts').textContent = 'Error loading total posts';
             document.getElementById('other-posts-by-category').innerHTML = '<li>Error loading categories</li>';
         }
+    }finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
 // FRIENDS
 async function sendFriendRequest(useraddresserid = null, useraddresseeid = null) {
+    const spinner = document.getElementById('loading-spinner');
     try {
+        if (spinner) spinner.style.display = 'flex';
         useraddresserid = await getuserid();
 
         const friendRequestResponse = await fetch('/api/friends/request', {
@@ -1714,6 +1861,8 @@ async function sendFriendRequest(useraddresserid = null, useraddresseeid = null)
     } catch (error) {
         console.error('Error sending friend request:', error);
         showCustomAlert('An error occurred while sending the friend request');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
     }
 }
 

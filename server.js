@@ -121,13 +121,24 @@ const saltRounds = 10;
 
 
 
-// register endpoint
 app.post('/register', async (req, res) => {
     const { schoolfullname, email, userfullname, password } = req.body;
     const userid = email;
 
     try {
-        // Insert the new school since we assume the moderator is creating a new one
+        // **Check if the user already exists**
+        const existingUser = await pool.query('SELECT userid FROM userprofile WHERE userid = $1', [userid]);
+        if (existingUser.rows.length > 0) {
+            return res.status(409).json({ success: false, message: 'An account with this email already exists. Please sign up.' });
+        }
+
+        // **Check if school already exists**
+        const existingSchool = await pool.query('SELECT schoolid FROM school WHERE schoolfullname = $1', [schoolfullname]);
+        if (existingSchool.rows.length > 0) {
+            return res.status(409).json({ success: false, message: 'A school with this name already exists.' });
+        }
+
+        // **Insert new school**
         const insertSchoolResult = await pool.query(
             'INSERT INTO school (schoolfullname) VALUES ($1) RETURNING schoolid',
             [schoolfullname]
@@ -136,15 +147,16 @@ app.post('/register', async (req, res) => {
 
         console.log(`Assigned school ID: ${schoolid} for moderator: ${userid}`);
 
-        // Hash the password
+        // **Hash the password**
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Insert moderator with the new school
+        // **Insert moderator**
         await pool.query(
             'INSERT INTO userprofile (userid, userfullname, userpasswordhash, schoolid, userrole) VALUES ($1, $2, $3, $4, $5)',
             [userid, userfullname, hashedPassword, schoolid, 'm']
         );
 
+        // **Save session**
         req.session.userid = userid;
         res.json({ success: true });
 
@@ -153,6 +165,7 @@ app.post('/register', async (req, res) => {
         res.status(500).json({ success: false, message: 'Database error' });
     }
 });
+
 
 
 
@@ -179,13 +192,23 @@ app.post('/signup', async (req, res) => {
     const userid = email; // Assuming userid is the email
 
     try {
-        // Check if the school exists
-        const schoolid = await getschoolid(school);
+        // **Check if user already exists**
+        const existingUser = await pool.query('SELECT userid FROM userprofile WHERE userid = $1', [userid]);
+        if (existingUser.rows.length > 0) {
+            return res.status(409).json({ success: false, message: 'An account with this email already exists.' });
+        }
 
-        // Hash the password securely
+        // **Check if school exists**
+        const schoolResult = await pool.query('SELECT schoolid FROM school WHERE schoolfullname = $1', [school]);
+        if (schoolResult.rows.length === 0) {
+            return res.status(400).json({ success: false, message: 'The specified school does not exist. Please contact your school administrator.' });
+        }
+        const schoolid = schoolResult.rows[0].schoolid;
+
+        // **Hash the password securely**
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Insert user into the database
+        // **Insert user into the database**
         const query = `
             INSERT INTO userprofile (userid, userfullname, userpasswordhash, schoolid, usergraduationyear, userrole) 
             VALUES ($1, $2, $3, $4, $5, $6) RETURNING userid
@@ -193,19 +216,15 @@ app.post('/signup', async (req, res) => {
 
         await pool.query(query, [userid, fullName, hashedPassword, schoolid, year, 's']);
 
-        // Save the user session
+        // **Save user session**
         req.session.userid = userid;
         res.json({ success: true });
 
     } catch (error) {
         console.error('Error processing signup:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An error occurred while processing signup. Please try again later.' });
     }
 });
-
-
-
-
 
 // Login Endpoint
 app.post('/login', async (req, res) => {

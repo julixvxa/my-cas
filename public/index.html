@@ -47,10 +47,12 @@
         <div id="login-panel" style="display:block;">
             <h2>Log In</h2>
             <form id="login-form">
-                <input type="email" id="login-email" placeholder="Email" required>
-                <input type="password" id="login-password" placeholder="Password" required>
+                <input type="email" id="login-email" placeholder="Email *" required>
+                <input type="password" id="login-password" placeholder="Password *" required>
                 <label for="show-login-password">Show Password</label>
                 <input class="show-password" type="checkbox" id="show-login-password">
+                <p>* Required field</p>
+
                 <button type="submit">Log In</button>
             </form>
             <button onclick="showSignUp()">Sign Up</button>
@@ -61,19 +63,21 @@
         <div id="signup-panel" style="display:none;">
             <h2>Sign Up</h2>
             <form id="signup-form">
-                <input type="email" id="signup-email" placeholder="Email" required>
-                <input type="text" id="signup-fullname" placeholder="Full Name" required>
+                <input type="email" id="signup-email" placeholder="Email *" required>
+                <input type="text" id="signup-fullname" placeholder="Full Name *" required>
                 
-                <input type="password" id="signup-password" placeholder="Password" required>
+                <input type="password" id="signup-password" placeholder="Password *" required>
                 <label for="show-signup-password">Show Password</label>
                 <input class="show-password" type="checkbox" id="show-signup-password">
                 
-                <input type="password" id="signup-repeat-password" placeholder="Repeat Password" required>
+                <input type="password" id="signup-repeat-password" placeholder="Repeat Password *" required>
                 <label for="show-signup-repeat-password">Show Password</label>
                 <input class="show-password" type="checkbox" id="show-signup-repeat-password">
             
-                <input type="text" id="signup-school" placeholder="School Name">
-                <input type="number" id="signup-year" placeholder="Graduation Year">
+                <input type="text" id="signup-school" placeholder="School Name *" required>
+                <input type="number" id="signup-year" placeholder="Graduation Year *" required>
+                <p>* Required field</p>
+
                 
                 <button type="submit">Sign Up</button>
                 <p id="errorMessage" style="color: red;"></p>
@@ -87,16 +91,19 @@
         <div id="register-panel" style="display:none">
             <h2>Register CAS Coordinator</h2>
             <form id="register-form">
-                <input type="text" id="register-school" placeholder="School Full Name">
-                <input type="email" id="register-email" placeholder="Email" required>
-                <input type="text" id="register-fullname" placeholder="Full Name" required>
-                <input type="password" id="register-password" placeholder="Password" required>
+
+                <input type="text" id="register-school" placeholder="School Full Name *" required>
+                <input type="email" id="register-email" placeholder="Email *" required>
+                <input type="text" id="register-fullname" placeholder="Full Name *" required>
+                <input type="password" id="register-password" placeholder="Password *" required>
                 <label for="show-register-password">Show Password</label>
                 <input class="show-password" type="checkbox" id="show-register-password">
                 
-                <input type="password" id="register-repeat-password" placeholder="Repeat Password" required>
+                <input type="password" id="register-repeat-password" placeholder="Repeat Password *" required>
                 <label for="show-register-repeat-password">Show Password</label>
                 <input class="show-password" type="checkbox" id="show-register-repeat-password">
+                <p>* Required field</p>
+
 
                 <button type="submit">Register</button>
                 <p id="errorMessage" style="color: red;"></p>
@@ -209,6 +216,8 @@
                     <input type="file" id="post-media" multiple>
                 </div>
 
+                <p>* Required field</p>
+
                 <!-- Submit Button -->
                 <button type="submit">Post</button>
             </form>
@@ -232,24 +241,22 @@
                 <div class="modal">
                     <h2>Change Password</h2>
                     <form id="password-form">
-                        <label style="font-weight: bold;">Old Password:</label>
-                        <input type="password" id="old-password" required>
+                        <input type="password" id="old-password" placeholder="Old Password *" required>
                         <label for="show-old-password">Show Password</label>
                         <input class="show-password" type="checkbox" id="show-old-password">
 
                         <br>
-                        <label style="font-weight: bold;">New Password:</label>
-                        <input type="password" id="new-password" required>
+                        <input type="password" id="new-password" placeholder="New Password *" required>
                         <label for="show-new-password">Show Password</label>
                         <input class="show-password" type="checkbox" id="show-new-password">
 
                         <br>
-                        <label style="font-weight: bold;">Confirm New Password:</label>
-                        <input type="password" id="confirm-password" required>
+                        <input type="password" id="confirm-password" placeholder="Confirm New Password *" required>
                         <label for="show-confirm-password">Show Password</label>
                         <input class="show-password" type="checkbox" id="show-confirm-password">
 
                         <br>
+                        <p>* Required field</p>
                         <button style="font-weight: bold;" type="submit">Update Password</button>
                     </form>
                     <p id="password-error" style="color: red;"></p>
@@ -386,13 +393,20 @@
 
     </div>
 
-    <!-- Custom Modal for Alerts -->
-    <div class="modal-overlay" id="customAlert" style="display: none;">
+
+    <!-- Custom Alert & Confirmation Modal -->
+    <div id="customAlert" class="modal-overlay" style="display: none;">
         <div class="modal">
-        <p id="alertMessage">Your message here</p>
-        <button id="closeAlert">OK</button>
+            <p id="alertMessage">Your message here</p>
+            <div class="modal-buttons">
+                <button id="confirmAlert" style="display: none;">Confirm</button>
+                <button id="cancelAlert" style="display: none;">Cancel</button>
+                <button id="closeAlert">OK</button>
+            </div>
         </div>
     </div>
+
+
     <!-- Popup Messages will appear here -->
     <div id="popup-area" class="popup-area"></div>
 

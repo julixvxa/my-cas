@@ -66,6 +66,7 @@ body {
 
 /* Each Friend Item */
 .friend-item {
+    font-size: 14px;
     padding: 10px;
     border-bottom: 1px solid #e0e0e0;
     display: flex;
@@ -931,7 +932,7 @@ select:hover, select:focus {
     transform: translateY(-50%) scale(1.1); /* Slightly scale the arrow without shifting position */
   }
   
-  /* Modal overlay */
+/* Modal overlay */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -943,10 +944,10 @@ select:hover, select:focus {
     justify-content: center;
     align-items: center;
     z-index: 1000;
-  }
+}
   
-  /* Modal dialog box */
-  .modal {
+/* Modal dialog box */
+.modal {
     background: white;
     padding: 20px 30px;
     border-radius: 8px;
@@ -954,27 +955,67 @@ select:hover, select:focus {
     text-align: center;
     max-width: 400px;
     width: 100%;
-  }
-  
-  /* Style for the message */
-  .modal p {
+}
+
+/* Style for the message */
+.modal p {
     margin-bottom: 20px;
     font-size: 16px;
-  }
-  
-  /* Close Button */
-  #closeAlert {
+}
+
+/* Close Button */
+#closeAlert {
     padding: 10px 20px;
     background-color: #333;
     color: white;
     border: none;
     cursor: pointer;
     border-radius: 4px;
-  }
-  
-  #closeAlert:hover {
+}
+
+#closeAlert:hover {
     background-color: #555;
-  }
+}
+
+/* Modal content */
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+/* Centering buttons */
+.modal-buttons {
+    display: flex;
+    justify-content: center;  /* Centers buttons horizontally */
+    align-items: center;      /* Centers buttons vertically */
+    gap: 10px;  /* Adds spacing between buttons */
+    margin-top: 10px;
+}
+
+/* Button styles */
+.modal-buttons button {
+    padding: 10px 15px;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+/* Confirm button */
+#confirmAlert {
+    background: #4CAF50; /* Green */
+    color: white;
+}
+
+/* Cancel button */
+#cancelAlert {
+    background: #F44336; /* Red */
+    color: white;
+}
+
 /* Container for popup messages */
 .popup-area {
     position: fixed;
@@ -1045,8 +1086,68 @@ select:hover, select:focus {
 }
 
 /* User info section */
+/* User Info Container */
 .user-info {
-    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 5px 10px;
+    background: linear-gradient(90deg, rgba(70, 118, 169, 0.146), rgb(255, 255, 255));
+    border-radius: 8px;
+    transition: background 0.3s ease-in-out;
+}
+
+.user-info:hover {
+    background: rgba(29, 73, 120, 0.2); /* Slightly darker background on hover */
+}
+
+/* User Fullname Link */
+.user-info a {
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 1.1em;
+    background: linear-gradient(90deg, rgb(29, 73, 120), rgb(52, 122, 190), rgb(91, 170, 255)); /* Blue gradient */
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    position: relative;
+    transition: all 0.3s ease-in-out;
+}
+
+/* Dynamic animated underline */
+.user-info a::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -4px;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, rgb(70, 118, 169), rgb(91, 170, 255));
+    transition: width 0.3s ease-in-out, left 0.3s ease-in-out;
+}
+
+/* Hover Effects */
+.user-info a:hover {
+    filter: drop-shadow(0px 0px 6px rgba(91, 170, 255, 0.8)); /* Neon blue glow effect */
+    transform: scale(1.08);
+}
+
+.user-info a:hover::after {
+    width: 100%;
+    left: 0;
+}
+
+/* User Icon */
+.user-info a::before {
+    margin-right: 5px;
+    animation: floatUserIcon 2s infinite ease-in-out;
+}
+
+/* Floating animation for the icon */
+@keyframes floatUserIcon {
+    0% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+    100% { transform: translateY(0); }
 }
 
 /* User name */
