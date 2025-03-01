@@ -8,6 +8,69 @@ body {
     line-height: 1.6;
 }
 
+a{
+    text-decoration: none;
+}
+
+/* Latest Friends Container */
+#latest-friends {
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Title Styling */
+.latest-friends-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: rgb(29, 73, 120);
+    margin-bottom: 10px;
+}
+
+/* Friends List Styling */
+.friends-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* Each Friend Item */
+.friend-item {
+    padding: 10px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+}
+
+/* Last Friend Item (Remove Border) */
+.friend-item:last-child {
+    border-bottom: none;
+}
+
+/* Friend Link Styling */
+.friend-item a {
+    text-decoration: none;
+    color: rgb(29, 73, 120);
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+.friend-item a:hover {
+    color: #1d4d7a;
+    text-decoration: underline;
+}
+
+/* No Friends / Error Message */
+.no-friends, .error-message {
+    font-size: 14px;
+    color: #888;
+    text-align: center;
+    margin-top: 10px;
+}
+
 /* General Styling for Search Panels */
 #searching, #other-searching {
     background-color: #ffffff;
@@ -1004,4 +1067,124 @@ select:hover, select:focus {
     color: #666;
     text-align: center;
     margin-top: 20px;
+}
+
+/* Friend Request Container */
+.friend-container {
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 16px;
+    margin: 15px 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    text-align: center;
+}
+
+/* Friend Request Message */
+.friend-container p {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 12px;
+}
+
+/* Accept & Decline Buttons */
+.friend-container button {
+    background: #1d72b8;
+    color: white;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.3s ease;
+    margin: 5px;
+}
+
+.friend-container button:hover {
+    background: #145a8b;
+}
+
+/* Decline Button Styling */
+.friend-container .decline-btn {
+    background: #ff4d4d;
+}
+
+.friend-container .decline-btn:hover {
+    background: #cc0000;
+}
+
+/* User Info Card */
+.user-info-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+    margin-bottom: 15px;
+}
+
+.user-info-card p {
+    font-size: 16px;
+    color: #444;
+    margin-bottom: 8px;
+}
+
+/* Moderator Badge */
+.moderator-badge {
+    color: white;
+    background: red;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-weight: bold;
+    display: inline-block;
+    margin-bottom: 10px;
+}
+
+/* Friend Request Pending Message */
+.friend-pending {
+    font-size: 16px;
+    color: #777;
+    font-style: italic;
+}
+
+/* Statistics Container */
+.stats-container {
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 16px;
+    margin: 15px 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    text-align: left;
+}
+
+/* Total Posts Style */
+#total-posts, #other-total-posts {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+/* Category List */
+#posts-by-category, #other-posts-by-category {
+    list-style-type: none;
+    padding: 0;
+}
+
+#posts-by-category li, #other-posts-by-category li {
+    font-size: 16px;
+    padding: 8px;
+    margin-bottom: 5px;
+    background: #f7f7f7;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+}
+
+#posts-by-category li strong, #other-posts-by-category li strong {
+    margin-right: 8px;
+    color: #1d4d7a;
 }

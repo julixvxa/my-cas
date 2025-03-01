@@ -929,9 +929,9 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
 
             let userfullnameLink;
             if (userid === currentUser) {
-                userfullnameLink = `<a href="#" onclick="showUserInfo('${post.userid}')">${userfullname}</a>`;
+                userfullnameLink = `<a href="#" onclick="showUserInfo('${post.userid}')">&#128100; ${userfullname}</a>`;
             } else {
-                userfullnameLink = `<a href="#" onclick="showOtherUserInfo('${post.userid}')">${userfullname}</a>`;
+                userfullnameLink = `<a href="#" onclick="showOtherUserInfo('${post.userid}')">&#128100; ${userfullname}</a>`;
             }
 
             const canDeletePost = userRole === 'm' || (userRole === 's' && post.userid === userRoleData.userid);
@@ -971,7 +971,7 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
                     <div class="comments-list" id="comments-${post.postid}">
                         ${comments.length > 0 ? comments.map(comment => 
                             `<div class="comment">
-                                <div class="comment-author">${comment.userfullname}</div>
+                                <div class="comment-author"> &#128100; ${comment.userfullname}</div>
                                 <div class="comment-text">${comment.commenttext}</div>
                                 <div class="comment-date">${convertUTCToLocal(comment.commentdate)}</div>
                                 ${userRole === 'm' || (userRole === 's' && comment.commentinguserid === userRoleData.userid) ? 
@@ -1118,7 +1118,7 @@ function displaySearchResults(users) {
         userElement.innerHTML = `
             <div class="user-info">
                 <p class="user-name">&#128100; <strong>${user.userfullname}</strong></p>
-                <p class="user-school">&#127891; ${user.schoolfullname || 'N/A'}</p>
+                <p class="user-school">&#127979; ${user.schoolfullname || 'N/A'}</p>
             </div>
             <button class="view-profile-btn" onclick="showOtherUserInfo('${user.userid}')">View Profile</button>
         `;
@@ -1133,8 +1133,10 @@ async function showLatestFriends(userid, currentUser) {
     const friendContainer = document.getElementById('latest-friends');
     friendContainer.innerHTML = ''; // Clear existing content
 
+    // Title with styling
     const title = document.createElement('h3');
-    title.textContent = "Latest Friends:";
+    title.innerHTML = "&#128101; Latest Friends:";
+    title.classList.add('latest-friends-title');
     friendContainer.appendChild(title);
 
     try {
@@ -1144,13 +1146,17 @@ async function showLatestFriends(userid, currentUser) {
 
         if (data.success && data.friends.length > 0) {
             const ul = document.createElement('ul');
+            ul.classList.add('friends-list');
 
             data.friends.forEach(friend => {
                 const li = document.createElement('li');
+                li.classList.add('friend-item');
+
                 const friendLink = document.createElement('a');
-                friendLink.textContent = friend.userfullname;
+                friendLink.innerHTML = `&#128100; ${friend.userfullname}`;
                 friendLink.href = '#';
 
+                // Click event for viewing friend profile
                 if (friend.userid === currentUser) {
                     friendLink.addEventListener('click', () => showUserInfo());
                 } else {
@@ -1163,13 +1169,14 @@ async function showLatestFriends(userid, currentUser) {
 
             friendContainer.appendChild(ul);
         } else {
-            friendContainer.innerHTML = '<p>No recent friends found.</p>';
+            friendContainer.innerHTML = '<p class="no-friends">No recent friends found.</p>';
         }
     } catch (error) {
         console.error('Error fetching latest friends:', error);
-        friendContainer.innerHTML = '<p>Error loading friends.</p>';
+        friendContainer.innerHTML = '<p class="error-message">Error loading friends.</p>';
     }
 }
+
 
 // VIEWING MY PROFILE
 async function showUserInfo(userid = null) {
@@ -1225,13 +1232,13 @@ async function showUserInfo(userid = null) {
         
         // Construct user info HTML
         userInfoHTML += `
-            <p><strong>Full Name:</strong> ${userInfo.userfullname}</p>
-            <p><strong>School:</strong> ${userInfo.schoolfullname || 'N/A'}</p>
+            <p><strong>&#128100; Full Name:</strong> ${userInfo.userfullname}</p>
+            <p><strong>&#127979; School:</strong> ${userInfo.schoolfullname || 'N/A'}</p>
         `;
         
         // If the user is not a moderator, show graduation year
         if (!isModerator) {
-            userInfoHTML += `<p><strong>Graduation Year:</strong> ${userInfo.usergraduationyear || 'N/A'}</p>`;
+            userInfoHTML += `<p><strong>&#127891; Graduation Year:</strong> ${userInfo.usergraduationyear || 'N/A'}</p>`;
         }
 
         document.getElementById('user-info').innerHTML = userInfoHTML;
@@ -1368,36 +1375,43 @@ async function showOtherUserInfo(userid = null) {
 
             console.log("Friendship status:", friendshipStatus);
 
+            let friendContainer = document.getElementById('friend');
+            friendContainer.classList.add('friend-container'); // Add the new styling class
+
+
             if (friendshipStatus === 'p') {
                 if (useraddresseeid === currentUser) {
                     friendContainer.innerHTML = `<p>You received a friend request from this user</p>`;
-
+            
                     acceptButton = document.createElement('button');
-                    acceptButton.innerText = 'Accept';
+                    acceptButton.innerText = '✔ Accept';
+                    acceptButton.classList.add('accept-btn');
                     acceptButton.addEventListener('click', async () => {
                         console.log(`Accepting friend request from ${useraddresserid}`); 
                         respondToFriendRequest('accept', useraddresserid);
                     });
-
+            
                     let declineButton = document.createElement('button');
-                    declineButton.innerText = 'Decline';
+                    declineButton.innerText = '✖ Decline';
+                    declineButton.classList.add('decline-btn');
                     declineButton.addEventListener('click', async () => {
                         console.log(`Declining friend request from ${useraddresserid}`); 
                         respondToFriendRequest('decline', useraddresserid);
                     });
-
+            
                     friendContainer.appendChild(acceptButton);
                     friendContainer.appendChild(declineButton);
                 } else {
-                    friendContainer.innerHTML = `<p>Friend request pending</p>`;
+                    friendContainer.innerHTML = `<p class="friend-pending">Friend request pending ⏳</p>`;
                 }
             } else if (friendshipStatus === 'a') {
-                friendContainer.innerHTML = `<p>You are friends</p>`;
+                friendContainer.innerHTML = `<p>✅ You are friends</p>`;
             } else if (friendshipStatus === 'd') {
-                friendContainer.innerHTML = `<button onclick="sendFriendRequest(null, '${userid}')">Add Friend</button>`;
+                friendContainer.innerHTML = `<button onclick="sendFriendRequest(null, '${userid}')">➕ Add Friend</button>`;
             } else {
-                friendContainer.innerHTML = `<p>Error determining friendship status</p>`;
+                friendContainer.innerHTML = `<p>❌ Error determining friendship status</p>`;
             }
+            
         } catch (error) {
             console.error('Error in checking friendship status:', error);
             friendContainer.innerHTML = `<p>Error checking friendship status</p>`;
@@ -1433,13 +1447,13 @@ async function showOtherUserInfo(userid = null) {
 
         // Construct user info HTML
         userInfoHTML += `
-            <p><strong>Full Name:</strong> ${userInfo.userfullname}</p>
-            <p><strong>School:</strong> ${userInfo.schoolfullname || 'N/A'}</p>
+            <p><strong>&#128100; Full Name:</strong> ${userInfo.userfullname}</p>
+            <p><strong>&#127979; School:</strong> ${userInfo.schoolfullname || 'N/A'}</p>
         `;
 
         // If the user is not a moderator, show the graduation year
         if (!isModerator) {
-            userInfoHTML += `<p><strong>Graduation Year:</strong> ${userInfo.usergraduationyear || 'N/A'}</p>`;
+            userInfoHTML += `<p><strong>&#127891; Graduation Year:</strong> ${userInfo.usergraduationyear || 'N/A'}</p>`;
         }
 
         document.getElementById('other-user-info').innerHTML = userInfoHTML;
@@ -1635,8 +1649,16 @@ function displayUserStatistics(data, other = false) {
     const totalPostsElement = other ? document.getElementById('other-total-posts') : document.getElementById('total-posts');
     const categoryList = other ? document.getElementById('other-posts-by-category') : document.getElementById('posts-by-category');
 
-    // Display total posts
-    totalPostsElement.textContent = `Total Posts: ${data.totalPosts}`;
+    // Unicode icon representations
+    const icons = {
+        'Total Posts': '&#128221;',   // 📝
+        'Creativity': '&#127912;',    // 🎨
+        'Activity': '&#127939;',      // 🚴
+        'Service': '&#129309;'        //  🤝 
+    };
+
+    // Display total posts with Unicode icon
+    totalPostsElement.innerHTML = `<strong>${icons['Total Posts']} Total Posts:</strong> ${data.totalPosts}`;
 
     // Clear previous content
     categoryList.innerHTML = '';
@@ -1647,11 +1669,13 @@ function displayUserStatistics(data, other = false) {
     } else {
         data.postsByCategory.forEach(category => {
             const listItem = document.createElement('li');
-            listItem.textContent = `${category.postCASCategory}: ${category.count} posts`;
+            const categoryIcon = icons[category.postCASCategory] || '&#10067;'; // Default to ❓ if unknown
+            listItem.innerHTML = `<strong>${categoryIcon} ${category.postCASCategory}:</strong> ${category.count} posts`;
             categoryList.appendChild(listItem);
         });
     }
 }
+
 
 
 // Function to fetch notifications
