@@ -1,7 +1,11 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg'); // Use PostgreSQL
-const multer = require('multer');
+
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+
 const path = require('path');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
@@ -89,11 +93,27 @@ app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
 
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+
+// Set up Multer with Cloudinary storage
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: "uploads",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+    },
+});
+
+const upload = multer({ storage });
 
 
 
-// Serve static files from the uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
 const saltRounds = 10;
@@ -265,38 +285,6 @@ app.get('/user/:userid', async (req, res) => {
 
 
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/'); // Store files in the 'uploads/' folder
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`); // Create unique filenames based on current timestamp
-    }
-});
-
-// File validation
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = /jpg|jpeg|png|gif|webp/;
-    const mimeType = allowedTypes.test(file.mimetype);
-    const extName = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-
-    // Check file type
-    if (mimeType && extName) {
-        return cb(null, true); // Accept the file
-    } else {
-        cb(new Error('Only image files are allowed'), false); // Reject the file
-    }
-};
-
-// File size validation 
-const upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
-    limits: { fileSize: 15 * 1024 * 1024 }  // Limit files to 15MB
-});
-
-
-
 // Create a new post with media
 app.post('/post', upload.array('media', 5), async (req, res) => {
     console.log('Received request at /post'); 
@@ -316,13 +304,13 @@ app.post('/post', upload.array('media', 5), async (req, res) => {
         const insertPostQuery = `INSERT INTO post 
             (userid, postcascategoryid, postmonthid, posttext, postdate, postprivacyid) 
             VALUES ($1, $2, $3, $4, $5, $6) RETURNING postid`;
-        
+
         const result = await pool.query(insertPostQuery, [userid, category, month, text, postdate, privacy]);
-        const postid = result.rows[0].postid;  // PostgreSQL returns lowercase column names by default
+        const postid = result.rows[0].postid;
 
         if (req.files.length > 0) {
-            // Insert media files
-            const mediaValues = req.files.map(file => `(${postid}, '${file.filename}')`).join(",");
+            // Insert Cloudinary URLs into the database
+            const mediaValues = req.files.map(file => `(${postid}, '${file.path}')`).join(",");
             const insertMediaQuery = `INSERT INTO media (postid, mediafile) VALUES ${mediaValues}`;
             await pool.query(insertMediaQuery);
         }
@@ -334,6 +322,25 @@ app.post('/post', upload.array('media', 5), async (req, res) => {
         res.status(500).json({ success: false, message: 'Database error' });
     }
 });
+
+
+// FETCHING MEDIA
+app.get('/media/:postid', async (req, res) => {
+    const postid = req.params.postid;
+    const query = 'SELECT mediafile FROM media WHERE postid = $1';
+
+    try {
+        const result = await pool.query(query, [postid]);
+
+        // Send back the Cloudinary URLs as they are
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching media:', err.message);
+        res.status(500).json({ success: false, message: 'Database error' });
+    }
+});
+
+
 
 
 
@@ -357,23 +364,6 @@ app.get('/posts', async (req, res) => {
 });
 
 
-
-
-
-
-// FETCHING MEDIA
-app.get('/media/:postid', async (req, res) => {
-    const postid = req.params.postid;
-    const query = 'SELECT mediafile FROM media WHERE postid = $1';
-
-    try {
-        const result = await pool.query(query, [postid]);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Error fetching media:', err.message);
-        res.status(500).json({ success: false, message: 'Database error' });
-    }
-});
 
 
 
@@ -462,7 +452,6 @@ app.get('/searchPosts', async (req, res) => {
 
         queryParams.push(userrole, currentUser, currentUser, userrole);
 
-        // ✅ Apply category, month, privacy, and user filters
         if (categoryid) query += ' AND post.postcascategoryid = $' + (queryParams.push(categoryid));
         if (monthid) query += ' AND post.postmonthid = $' + (queryParams.push(monthid));
         if (privacyid) query += ' AND post.postprivacyid = $' + (queryParams.push(privacyid));

@@ -981,7 +981,7 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
                         <div class="carousel">
                             ${media.map((m, index) => `
                                 <div class="carousel-item" style="display: ${index === 0 ? 'block' : 'none'}">
-                                    <img src="/uploads/${m.mediaFile}" alt="Media" class="carousel-image"/>
+                                    <img src="${m.mediafile}" alt="Media" class="carousel-image"/>
                                 </div>
                             `).join('')}
                         </div>
