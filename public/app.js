@@ -324,7 +324,6 @@ function displayPopupMessage(message, type = 'success') {
 function validateInput(email = null, fullName = null, password = null) {
     const errors = [];
 
-    // Validate email only if provided
     if (email !== null) {
         const emailRegex = /^(?=.*@)(?=.*\.).{5,}$/;
         if (!emailRegex.test(email)) {
@@ -332,7 +331,6 @@ function validateInput(email = null, fullName = null, password = null) {
         }
     }
 
-    // Validate full name only if provided
     let normalizedFullName = fullName;
     if (fullName !== null) {
         const fullNameRegex = /^[a-zA-ZÀ-ÖØ-öø-ÿ]+([ '-][a-zA-ZÀ-ÖØ-öø-ÿ]+)*$/;
@@ -348,7 +346,6 @@ function validateInput(email = null, fullName = null, password = null) {
         }
     }
 
-    // Validate password only if provided
     if (password !== null) {
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
         if (!passwordRegex.test(password)) {
@@ -672,17 +669,33 @@ async function handlePostCreation(event) {
     const posttext = document.getElementById('post-text').value;
     const postcategory = document.getElementById('post-category').value;
     const postmonth = document.getElementById('post-month').value;
-    const postprivacy = document.getElementById('post-privacy').value;  // Get the selected privacy level
+    const postprivacy = document.getElementById('post-privacy').value;
     const mediafiles = document.getElementById('post-media').files;
 
     const formData = new FormData();
     formData.append('text', posttext);
     formData.append('category', postcategory);
     formData.append('month', postmonth);
-    formData.append('privacy', postprivacy);  // Include privacy level in the form data
-    for (const file of mediafiles) {
-        formData.append('media', file);
+    formData.append('privacy', postprivacy);
+
+    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+
+    if (mediafiles.length > 0) {
+        for (let i = 0; i < mediafiles.length; i++) {
+            const file = mediafiles[i];
+
+            // Check file type
+            if (!allowedFormats.includes(file.type)) {
+                showCustomAlert(`Invalid file format: ${file.name}. Allowed formats: JPG, PNG, GIF, WEBP.`);
+                return;
+            }
+
+            // Append file with unique name
+            formData.append(`media[${i}]`, file);
+        }
     }
+
+    console.log('Submitting form data:', formData); // Debugging log
 
     const spinner = document.getElementById('loading-spinner');
     try {
@@ -693,26 +706,21 @@ async function handlePostCreation(event) {
             body: formData
         });
 
-        // Check if the response was successful
         if (!response.ok) {
             const errorResponse = await response.json();
-            if (errorResponse.message) {
-                throw new Error(errorResponse.message);  // Propagate error from server
-            } else {
-                throw new Error('Network response was not ok');
-            }
+            throw new Error(errorResponse.message || 'Network response was not ok');
         }
 
         const result = await response.json();
         if (result.success) {
             showCustomAlert('Post created successfully');
-            document.getElementById('post-form').reset(); // Reset form
+            document.getElementById('post-form').reset();
             console.log('Post created');
             document.getElementById('search-bar').value = '';
             document.getElementById('search-category').value = '';
             document.getElementById('search-month').value = '';
             loadPost();
-            showFeed(); // Show the feed after post creation
+            showFeed();
         } else {
             showCustomAlert('Failed to create post');
         }
@@ -723,6 +731,7 @@ async function handlePostCreation(event) {
         if (spinner) spinner.style.display = 'none';
     }
 }
+
 
 // COMMENT SUBMISSIONS
 async function handleCommentSubmission(event, postid, postsowneruserid) {
@@ -1607,7 +1616,6 @@ async function showOtherUserInfo(userid = null) {
                         acceptButton.innerText = '✔ Accept';
                         acceptButton.classList.add('accept-btn');
                         acceptButton.addEventListener('click', async () => {
-                            console.log(`Accepting friend request from ${useraddresserid}`); 
                             respondToFriendRequest('accept', useraddresserid);
                         });
 

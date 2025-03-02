@@ -110,7 +110,17 @@ const storage = new CloudinaryStorage({
     },
 });
 
-const upload = multer({ storage });
+const fileFilter = (req, file, cb) => {
+    const allowedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedFormats.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error(`Invalid file format: ${file.originalname}. Allowed formats: JPG, PNG, GIF, WEBP.`), false);
+    }
+};
+
+const upload = multer({ storage, fileFilter });
+
 
 
 
@@ -205,10 +215,10 @@ app.post('/signup', async (req, res) => {
         }
         const schoolid = schoolResult.rows[0].schoolid;
 
-        // **Hash the password securely**
+        // Hash the password securely
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // **Insert user into the database**
+        // Insert user into the database
         const query = `
             INSERT INTO userprofile (userid, userfullname, userpasswordhash, schoolid, usergraduationyear, userrole) 
             VALUES ($1, $2, $3, $4, $5, $6) RETURNING userid
@@ -305,7 +315,14 @@ app.get('/user/:userid', async (req, res) => {
 
 
 // Create a new post with media
-app.post('/post', upload.array('media', 5), async (req, res) => {
+app.post('/post', (req, res, next) => {
+    upload.any()(req, res, function (err) {  // Change to upload.any() to support dynamic names
+        if (err) {
+            return res.status(400).json({ success: false, message: err.message });
+        }
+        next();
+    });
+}, async (req, res) => {
     console.log('Received request at /post'); 
     console.log('Request body:', req.body);
     console.log('Uploaded files:', req.files);
@@ -327,8 +344,7 @@ app.post('/post', upload.array('media', 5), async (req, res) => {
         const result = await pool.query(insertPostQuery, [userid, category, month, text, postdate, privacy]);
         const postid = result.rows[0].postid;
 
-        if (req.files.length > 0) {
-            // Insert Cloudinary URLs into the database
+        if (req.files && req.files.length > 0) {
             const mediaValues = req.files.map(file => `(${postid}, '${file.path}')`).join(",");
             const insertMediaQuery = `INSERT INTO media (postid, mediafile) VALUES ${mediaValues}`;
             await pool.query(insertMediaQuery);
@@ -337,10 +353,11 @@ app.post('/post', upload.array('media', 5), async (req, res) => {
         res.json({ success: true, postid });
 
     } catch (err) {
-        console.error('Error inserting post:', err.message);
-        res.status(500).json({ success: false, message: 'Database error' });
+        console.error('Error inserting post:', err);
+        res.status(500).json({ success: false, message: `Database error: ${err.message}` });
     }
 });
+
 
 
 // FETCHING MEDIA

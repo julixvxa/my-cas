@@ -769,6 +769,7 @@ textarea[name="commenttext"] {
     border-radius: 6px;
     font-size: 15px;
     resize: vertical;
+    width: 97%;
     min-height: 60px;
 }
 
