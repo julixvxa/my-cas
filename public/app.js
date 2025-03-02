@@ -1271,28 +1271,22 @@ async function searchPost(searchTerm = '', categoryid = '', monthid = '', privac
 async function searchUser(searchTerm = '') {
 
     if (!searchTerm) {
-        console.log('Search term is empty.');
         return; // Exit the function if search term is empty
     }
 
     const userid = await getuserid();
 
-
     const spinner = document.getElementById('loading-spinner');
     try {
         if (spinner) spinner.style.display = 'flex';
-        // Send a request to the server with the search term
         const response = await fetch(`/searchUser?term=${encodeURIComponent(searchTerm)}&userid=${userid}`);
         if (!response.ok) {
             throw new Error('Failed to fetch search results');
         }
 
-        // Parse the response JSON
         const data = await response.json();
-        console.log('Search response data:', data); // Log the response data for debugging
 
         if (data.success && Array.isArray(data.users)) {
-            // Display search results
             displaySearchResults(data.users);
         } else {
             console.error('Failed to fetch users or invalid data format');

@@ -454,7 +454,7 @@ app.get('/postload', async (req, res) => {
 app.get('/searchPosts', async (req, res) => {
     const client = await pool.connect();
     try {
-        const searchTerm = (req.query.search || '').trim();
+        const searchTermRaw = req.query.search || '';
         const { categoryid, monthid, userid, privacyid, postid, currentUser, userrole } = req.query;
 
         let query = `
@@ -468,14 +468,19 @@ app.get('/searchPosts', async (req, res) => {
 
         let queryParams = [currentUser, currentUser];
 
-        if (searchTerm.length) {
-            const searchTerms = searchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
-            if (!searchTerms.length) return res.status(400).json({ success: false, message: 'No valid search terms provided' });
-
-            const conditions = searchTerms.map((_, i) => `(post.posttext ILIKE $${queryParams.length + 1 + i} OR userprofile.userfullname ILIKE $${queryParams.length + 1 + i})`).join(' OR ');
-            queryParams.push(...searchTerms.map(term => `%${term}%`));
-
-            query += ` AND (${conditions})`;
+        if (searchTermRaw.trim().length > 0) {
+            // Decode the search term from URL encoding
+            const decodedSearchTerm = decodeURIComponent(searchTermRaw);
+            
+            // Split search terms by comma and clean them
+            const searchTerms = decodedSearchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
+            
+            if (searchTerms.length > 0) {
+                const searchConditions = searchTerms.map((_, i) => `(post.posttext ILIKE $${queryParams.length + 1 + i} OR userprofile.userfullname ILIKE $${queryParams.length + 1 + i})`);
+                queryParams.push(...searchTerms.map(term => `%${term}%`));
+                
+                query += ` AND (${searchConditions.join(' OR ')})`;
+            }
         }
 
         query += `
@@ -488,11 +493,11 @@ app.get('/searchPosts', async (req, res) => {
 
         queryParams.push(userrole, currentUser, currentUser, userrole);
 
-        if (categoryid) query += ' AND post.postcascategoryid = $' + (queryParams.push(categoryid));
-        if (monthid) query += ' AND post.postmonthid = $' + (queryParams.push(monthid));
-        if (privacyid) query += ' AND post.postprivacyid = $' + (queryParams.push(privacyid));
-        if (userid) query += ' AND post.userid = $' + (queryParams.push(userid));
-        if (postid && postid !== 'null') query += ' AND post.postid = $' + (queryParams.push(postid));
+        if (categoryid) query += ` AND post.postcascategoryid = $${queryParams.push(categoryid)}`;
+        if (monthid) query += ` AND post.postmonthid = $${queryParams.push(monthid)}`;
+        if (privacyid) query += ` AND post.postprivacyid = $${queryParams.push(privacyid)}`;
+        if (userid) query += ` AND post.userid = $${queryParams.push(userid)}`;
+        if (postid && postid !== 'null') query += ` AND post.postid = $${queryParams.push(postid)}`;
 
         query += ' ORDER BY post.postdate DESC';
 
@@ -509,6 +514,8 @@ app.get('/searchPosts', async (req, res) => {
         client.release();
     }
 });
+
+
 
 
 
