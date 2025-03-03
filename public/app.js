@@ -1034,8 +1034,9 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
         const userRoleData = await userRoleResponse.json();
         const userRole = userRoleData.role;
         const currentUser = await getuserid();
+        console.log('role', userRole);
 
-        const posts = postsData || await (await fetch(userid ? `/postload?userid=${userid}&userRole=${userRole}&currentUser=${currentUser}` : `/postload?userRole=${userRole}&currentUser=${currentUser}`)).json();
+        const posts = postsData || await (await fetch(userid ? `/postload?userid=${userid}&userrole=${userRole}&currentUser=${currentUser}` : `/postload?userrole=${userRole}&currentUser=${currentUser}`)).json();
 
         if (!Array.isArray(posts)) {
             console.error('Posts data is not an array:', posts);
@@ -1210,17 +1211,18 @@ async function loadPost(postsData = null, userid = null, other = false, notifica
 
 
 // SEARCHING POSTS
-async function searchPost(searchTerm = '', categoryid = '', monthid = '', privacyid = '', userid = null, other = false, postid = null) {
+async function searchPost(searchTerm = '', categoryid = '', monthid = '', privacyid = '', userid = null, other = false, postid = '') {
     
     const currentUser = await getuserid();
     const userRoleResponse = await fetch('/userRole');
     const userRoleData = await userRoleResponse.json();
-    const userRole = userRoleData.role;
+    const userrole = userRoleData.role;
     
     const spinner = document.getElementById('loading-spinner');
     try {
         if (spinner) spinner.style.display = 'flex';
         console.log('userid:', userid); // Ensure userid is defined and passed correctly
+        console.log(currentUser);
 
         const queryParams = new URLSearchParams({
             search: encodeURIComponent(searchTerm),
@@ -1228,7 +1230,7 @@ async function searchPost(searchTerm = '', categoryid = '', monthid = '', privac
             monthid,
             postid,
             privacyid,
-            userRole
+            userrole
         });
 
         if (userid) {

@@ -407,22 +407,14 @@ app.get('/posts', async (req, res) => {
 app.get('/postload', async (req, res) => {
     const { userid, currentUser, userrole } = req.query;
     
-    let query = `
-        SELECT p.*
-        FROM post p
-        LEFT JOIN friends f ON 
-            (p.userid = f.useraddresseeid AND f.useraddresserid = $1) 
-            OR (p.userid = f.useraddresserid AND f.useraddresseeid = $2)
-        WHERE 
-            (p.postprivacyid = 3) OR 
-            (p.postprivacyid = 2 AND (f.statusid = 'a' OR p.userid = $3 OR $4 = 'm')) OR 
-            (p.postprivacyid = 1 AND (p.userid = $5 OR $6 = 'm'))
-        ORDER BY p.postdate DESC;
-    `;
+    let query;
+    let params = [];
+    console.log(userrole);
 
-    let params = [currentUser, currentUser, currentUser, userrole, currentUser, userrole];
-
-    if (userid) {
+    if (userrole === 'm') {
+        // Moderators should see all posts, no privacy restrictions
+        query = `SELECT * FROM post ORDER BY postdate DESC;`;
+    } else {
         query = `
             SELECT p.*
             FROM post p
@@ -430,13 +422,29 @@ app.get('/postload', async (req, res) => {
                 (p.userid = f.useraddresseeid AND f.useraddresserid = $1) 
                 OR (p.userid = f.useraddresserid AND f.useraddresseeid = $2)
             WHERE 
-                (((p.postprivacyid = 3) OR 
-                (p.postprivacyid = 2 AND (f.statusid = 'a' OR p.userid = $3 OR $4 = 'm')) OR 
-                (p.postprivacyid = 1 AND (p.userid = $5 OR $6 = 'm'))) 
-                AND p.userid = $7)
+                (p.postprivacyid = 3) OR 
+                (p.postprivacyid = 2 AND (f.statusid = 'a' OR p.userid = $3)) OR 
+                (p.postprivacyid = 1 AND p.userid = $4)
             ORDER BY p.postdate DESC;
         `;
-        params.push(userid);
+        params = [currentUser, currentUser, currentUser, currentUser];
+
+        if (userid) {
+            query = `
+                SELECT p.*
+                FROM post p
+                LEFT JOIN friends f ON 
+                    (p.userid = f.useraddresseeid AND f.useraddresserid = $1) 
+                    OR (p.userid = f.useraddresserid AND f.useraddresseeid = $2)
+                WHERE 
+                    ((p.postprivacyid = 3) OR 
+                    (p.postprivacyid = 2 AND (f.statusid = 'a' OR p.userid = $3)) OR 
+                    (p.postprivacyid = 1 AND p.userid = $4)) 
+                    AND p.userid = $5
+                ORDER BY p.postdate DESC;
+            `;
+            params.push(userid);
+        }
     }
 
     try {
@@ -454,66 +462,66 @@ app.get('/postload', async (req, res) => {
 app.get('/searchPosts', async (req, res) => {
     const client = await pool.connect();
     try {
-        const searchTermRaw = req.query.search || '';
-        const { categoryid, monthid, userid, privacyid, postid, currentUser, userrole } = req.query;
+        console.log('Received Query Params:', req.query);
 
-        let query = `
-            SELECT post.*
-            FROM post
-            INNER JOIN userprofile ON post.userid = userprofile.userid
-            LEFT JOIN friends f ON (post.userid = f.useraddresseeid AND f.useraddresserid = $1) 
-                                OR (post.userid = f.useraddresserid AND f.useraddresseeid = $2)
-            WHERE 1=1
-        `;
+        const { search, categoryid, monthid, userid, privacyid, postid, currentUser, userrole } = req.query;
+        let query;
+        let queryParams = [];
+        console.log('server userrole ', userrole);
 
-        let queryParams = [currentUser, currentUser];
-
-        if (searchTermRaw.trim().length > 0) {
-            // Decode the search term from URL encoding
-            const decodedSearchTerm = decodeURIComponent(searchTermRaw);
-            
-            // Split search terms by comma and clean them
-            const searchTerms = decodedSearchTerm.split(',').map(term => term.trim()).filter(term => term.length > 0);
-            
-            if (searchTerms.length > 0) {
-                const searchConditions = searchTerms.map((_, i) => `(post.posttext ILIKE $${queryParams.length + 1 + i} OR userprofile.userfullname ILIKE $${queryParams.length + 1 + i})`);
-                queryParams.push(...searchTerms.map(term => `%${term}%`));
-                
-                query += ` AND (${searchConditions.join(' OR ')})`;
-            }
+        if (userrole && userrole.toLowerCase() === 'm') {
+            query = `SELECT post.* FROM post WHERE 1=1`;
+        } else {
+            query = `
+                SELECT post.*
+                FROM post
+                INNER JOIN userprofile ON post.userid = userprofile.userid
+                LEFT JOIN friends f ON 
+                    (post.userid = f.useraddresseeid AND f.useraddresserid = $1) 
+                    OR (post.userid = f.useraddresserid AND f.useraddresseeid = $2)
+                WHERE (
+                    post.postprivacyid = 3 
+                    OR (post.postprivacyid = 2 AND (COALESCE(f.statusid, '') = 'a' OR post.userid = $3)) 
+                    OR (post.postprivacyid = 1 AND post.userid = $4)
+                )
+            `;
+            queryParams.push(currentUser, currentUser, currentUser, currentUser);
         }
 
-        query += `
-            AND (
-                post.postprivacyid = 3 OR 
-                (post.postprivacyid = 2 AND (f.statusid = 'a' OR $${queryParams.length + 1} = 'm' OR post.userid = $${queryParams.length + 2})) OR 
-                (post.postprivacyid = 1 AND (post.userid = $${queryParams.length + 3} OR $${queryParams.length + 4} = 'm'))
-            )
-        `;
-
-        queryParams.push(userrole, currentUser, currentUser, userrole);
-
+        if (privacyid) {
+            console.log('Filtering by privacyid:', privacyid);
+            query += ` AND post.postprivacyid = $${queryParams.push(parseInt(privacyid))}`;
+        }
         if (categoryid) query += ` AND post.postcascategoryid = $${queryParams.push(categoryid)}`;
         if (monthid) query += ` AND post.postmonthid = $${queryParams.push(monthid)}`;
-        if (privacyid) query += ` AND post.postprivacyid = $${queryParams.push(privacyid)}`;
         if (userid) query += ` AND post.userid = $${queryParams.push(userid)}`;
         if (postid && postid !== 'null') query += ` AND post.postid = $${queryParams.push(postid)}`;
 
-        query += ' ORDER BY post.postdate DESC';
+        if (search && search.trim().length > 0) {
+            const searchTerms = decodeURIComponent(search).split(' ').map(term => `%${term.trim()}%`);
+            const searchConditions = searchTerms.map((_, i) =>
+                `(post.posttext ILIKE $${queryParams.length + 1 + i} OR userprofile.userfullname ILIKE $${queryParams.length + 1 + i})`
+            );
+            queryParams.push(...searchTerms);
+            query += ` AND (${searchConditions.join(' OR ')})`;
+        }
 
-        console.log('SQL Query:', query);
-        console.log('Query Parameters:', queryParams);
+        query += ' ORDER BY post.postdate DESC';
+        console.log('Generated SQL Query:', query);
+        console.log('Query Params:', queryParams);
 
         const result = await client.query(query, queryParams);
+        console.log('results: ', result);
         res.json({ success: true, posts: result.rows });
-
     } catch (err) {
-        console.error('Error executing query:', err.message);
+        console.error('Error searching posts:', err);
         res.status(500).json({ success: false, message: 'Database error' });
     } finally {
         client.release();
     }
 });
+
+
 
 
 
