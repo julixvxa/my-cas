@@ -561,8 +561,8 @@ async function handleLogin(event) {
             showCustomAlert('The password you entered is incorrect. Please try again.');
         } else if (response.status === 404) {
             // User not found
-            showCustomAlert('No account found with this email. Please register.');
-            showRegister();
+            showCustomAlert('No account found with this email. Please sign up.');
+            showSignUp();
         } else {
             // Handle other server errors
             console.error('Unexpected server response', result);
